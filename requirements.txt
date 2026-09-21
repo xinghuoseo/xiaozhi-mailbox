@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+websockets
+python-dotenv
+httpx
+pycryptodome
+python-multipart
+wecom-aibot-sdk

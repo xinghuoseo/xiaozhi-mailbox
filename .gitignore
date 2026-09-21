@@ -1,0 +1,21 @@
+# 密钥与配置（绝不入库）
+.env
+*.env.local
+
+# 数据与运行文件
+mailbox.db
+mailbox.db-*
+server.log
+*.log
+static/WW_verify_*.txt
+
+# 运行环境
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+.htaccess
