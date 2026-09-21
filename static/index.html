@@ -46,8 +46,8 @@ th{color:#999;font-weight:500}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:r .8s linear infinite;vertical-align:-2px;margin-right:4px}
 @keyframes r{to{transform:rotate(360deg)}}
 /* 记录页 */
-.rec-wrap{display:flex;gap:14px;align-items:flex-start}
-.day-list{width:300px;flex-shrink:0;max-height:calc(100vh - 160px);overflow:auto}
+.rec-wrap{display:flex;gap:14px;align-items:stretch;height:calc(100vh - 98px)}
+.day-list{width:300px;flex-shrink:0;overflow:auto}
 .day-item{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:10px;cursor:pointer;border:1px solid transparent}
 .day-item:hover{border-color:#c9d4ff}
 .day-item.active{border-color:#4f6ef7;background:#f6f8ff}
@@ -56,7 +56,7 @@ th{color:#999;font-weight:500}
 .day-item .r1 span{color:#999;font-size:12px}
 .day-item .r2{color:#888;font-size:12px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .day-item .r2 .gen{color:#4f6ef7;cursor:pointer}
-.chat{flex:1;background:#fff;border-radius:10px;padding:18px;max-height:calc(100vh - 160px);overflow:auto}
+.chat{flex:1 1 auto;min-height:0;background:#fff;border-radius:10px;padding:18px;overflow:auto}
 .chat .date-title{text-align:center;color:#999;font-size:13px;margin-bottom:14px}
 .bubble-row{display:flex;margin-bottom:14px}
 .bubble-row.mom{justify-content:flex-end}
@@ -122,17 +122,16 @@ th{color:#999;font-weight:500}
   <div class="page" id="page-records">
     <div class="rec-wrap">
       <div class="day-list" id="dayList"><div class="empty">暂无对话记录</div></div>
-      <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0">
-        <div class="card" id="sumBar" style="display:none;padding:12px 90px 30px 14px;max-height:130px;overflow:auto;position:relative">
+      <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0;height:100%;min-height:0">
+        <div class="card" id="sumBar" style="display:none;padding:12px 14px;flex:0 0 auto;max-height:50%;overflow:auto">
           <div id="sumDate" style="font-size:12px;color:#999;margin-bottom:4px"></div>
           <div id="sumText" style="font-size:13px;line-height:1.7;color:#555;white-space:pre-wrap"></div>
-          <button id="sumBtn" style="position:absolute;right:10px;bottom:10px;padding:4px 14px;font-size:12px" onclick="genSummary(currentDay)">总结</button>
         </div>
-        <div class="card" style="padding:12px;display:flex;gap:8px">
+        <div class="chat" id="chatBox" style="flex:1;overflow:auto"><div class="empty">← 选择左侧日期查看当天对话</div></div>
+        <div class="card" style="padding:12px;display:flex;gap:8px;flex:0 0 auto">
           <input id="webSendBox" placeholder="以妈妈身份给孩子留言（孩子对小智说“读留言”即可听到）" onkeydown="if(event.key==='Enter')sendFromWeb()">
           <button onclick="sendFromWeb()">发送</button>
         </div>
-        <div class="chat" id="chatBox" style="flex:1;overflow:auto"><div class="empty">← 选择左侧日期查看当天对话</div></div>
       </div>
     </div>
   </div>
@@ -409,10 +408,12 @@ async function loadDays(){
     let s;
     if (d.status === "done") s = `💬 ${esc(d.short)}`;
     else if (d.status === "empty") s = "当天没有对话";
-    else if (d.status === "failed") s = `总结生成失败 <span class="gen" onclick="genSummary('${d.date}')">重试</span>`;
-    else s = `AI 总结未生成 <span class="gen" onclick="genSummary('${d.date}')">生成</span>`;
+    else if (d.status === "failed") s = "总结生成失败";
+    else s = "AI 总结未生成";
+    const genBtn = d.status === "empty" ? "" :
+      ` · <span class="gen" onclick="genSummary('${d.date}');event.stopPropagation()">总结</span>`;
     return `<div class="day-item" id="day-${d.date}" onclick="openDay('${d.date}')">
-      <div class="r1"><b>${d.date}</b><span>${d.count} 条</span></div>
+      <div class="r1"><b>${d.date}</b><span>${d.count} 条${genBtn}</span></div>
       <div class="r2">${s}</div></div>`;
   }).join("");
 }
@@ -431,15 +432,13 @@ async function genSummary(date){
 function showSummaryBar(date){
   const bar = document.getElementById("sumBar");
   const d = currentDays.find(x=>x.date===date);
-  if (!d){ bar.style.display="none"; return; }
+  if (!d || d.status === "empty"){ bar.style.display="none"; return; }
   bar.style.display = "block";
   document.getElementById("sumDate").textContent = date + " · 当天总结";
   const t = document.getElementById("sumText");
-  const btn = document.getElementById("sumBtn");
-  if (d.status === "done"){ t.textContent = d.full || "（无总结内容）"; btn.style.display=""; }
-  else if (d.status === "empty"){ t.textContent = "当天没有对话记录"; btn.style.display="none"; }
-  else if (d.status === "failed"){ t.textContent = "总结生成失败，点右下角重试"; btn.style.display=""; }
-  else { t.textContent = "AI 总结还没生成，点右下角“总结”立即生成"; btn.style.display=""; }
+  if (d.status === "done"){ t.textContent = d.full || "（无总结内容）"; }
+  else if (d.status === "failed"){ t.textContent = "总结生成失败，可在左侧列表点“总结”重试"; }
+  else { t.textContent = "AI 总结还没生成，可在左侧列表点“总结”立即生成"; }
 }
 
 async function openDay(date){
