@@ -187,7 +187,8 @@ def _keep_or_new(new_val: str, old_val: str) -> str:
 
 def _bot_connected(config_id: int) -> bool:
     from .. import wecom_bot
-    return bool(wecom_bot._state.get(config_id, {}).get("ws"))
+    st = wecom_bot._state.get(config_id)
+    return bool(st and st["client"].connected)
 
 def _wecom_out(cfg) -> dict:
     return {"id": cfg["id"], "name": cfg["name"],

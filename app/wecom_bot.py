@@ -40,10 +40,16 @@ class WeComBotClient:
                                   max_reconnect_attempts=0)   # 内部不重连，由外层循环接管
                 self.client = client
                 self._register(client)
+                # 关键：监听 SDK 断线/错误事件（被新连接顶替、网络断开、服务端踢线等
+                # 都不会抛异常，必须靠事件唤醒下方的重连等待）
+                disc = asyncio.Event()
+                client.on("disconnected", lambda reason: disc.set())
+                client.on("error", lambda e: disc.set())
                 await client.connect()                        # 连接+鉴权（失败抛异常）
                 self.connected = True
                 log.info("企微机器人 %s 长连接已建立", self.cfg["bot_id"])
-                await asyncio.Event().wait()                  # 挂起保持运行，直到任务被取消
+                await disc.wait()                             # 断线事件触发 → 立即重连
+                log.warning("机器人%s 连接断开，5 秒后重连", self.cfg["id"])
             except asyncio.CancelledError:
                 if self.client:
                     try:
@@ -54,11 +60,13 @@ class WeComBotClient:
             except WSAuthFailureError as e:
                 log.error("机器人%s 认证失败（检查 BotID/Secret）: %s，60 秒后重试", self.cfg["id"], e)
                 await asyncio.sleep(60)
+                self.connected = False
+                continue
             except Exception as e:
                 log.error("机器人连接异常: %s，5 秒后重连", e)
                 await asyncio.sleep(5)
-            finally:
-                self.connected = False
+            self.connected = False
+            await asyncio.sleep(5)                            # 断线后稍等再重连
 
     def _register(self, client: WSClient):
         async def on_text(frame):
