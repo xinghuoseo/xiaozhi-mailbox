@@ -177,15 +177,10 @@ th{color:#999;font-weight:500}
     </div>
     <div class="card">
       <div class="dev-head"><b>企微应用配置</b><button onclick="openWecomModal()">+ 添加配置</button></div>
-      <table><thead><tr><th>名称</th><th>Bot ID</th><th>Secret</th><th>群会话</th><th>连接状态</th><th>操作</th></tr></thead>
+      <table><thead><tr><th>名称</th><th>Bot ID</th><th>Secret</th><th>群会话</th><th>连接状态</th><th>通过模式</th><th style="width:170px">操作</th></tr></thead>
       <tbody id="wecomTbody"></tbody></table>
-      <div style="margin-top:12px">
-        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="wcAuto" onchange="toggleAutoApprove(this.checked)">
-          新成员自动通过（关闭后：新成员 @机器人 发消息会进入申请列表，需人工通过）
-        </label>
-      </div>
     </div>
+
     </div>
     <div style="flex:1;min-width:0;display:none" id="wecomSub-apply">
       <div class="card">
@@ -210,12 +205,10 @@ th{color:#999;font-weight:500}
     <div id="wcBotFields">
       <label>Bot ID</label><input id="wcBotId" placeholder="企微后台长连接模式生成">
       <label>Secret</label><input id="wcBotKey" placeholder="企微后台长连接模式生成">
-      <div class="ai-note">长连接模式无需公网回调地址，也不用填接收人和群ID —— 机器人进群后 @它 发条消息，系统自动记录群会话用于通知。注意：企微官方规则，群聊里需 @机器人 才能收到消息；机器人单聊直接发即可。</div>
-    </div>
-    <div style="margin-top:12px">
-      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="wcAuto"> 新成员自动通过
-      </label>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:8px;text-align:left">
+        <input type="checkbox" id="wcAutoModal" style="width:16px;height:16px;margin:0;accent-color:#4f6ef7;flex-shrink:0">
+        <label for="wcAutoModal" style="cursor:pointer;margin:0;font-size:14px;color:#333;white-space:nowrap">新成员自动通过（无需审核）</label>
+      </div>
     </div>
     <div class="btns"><button class="ghost" onclick="closeMask('wecomMask')">取消</button><button onclick="saveWecom()">保存</button></div>
   </div>
@@ -354,7 +347,8 @@ async function loadWecom(){
     <td>${esc(c.bot_key_mask)||'-'}</td>
     <td>${c.chat_id ? '<span class="dot on"></span>已记录' : '<i style="color:#999">进群@机器人后自动记录</i>'}</td>
     <td><span class="dot ${c.connected?'on':'off'}"></span>${c.connected?'已连接':'未连接'}</td>
-    <td class="ops-cell">
+    <td>${c.auto_approve ? '<span style="color:#22b07d;font-weight:600">自动</span>' : '<span style="color:#b8860b">审核</span>'}</td>
+    <td class="ops-cell" style="width:170px">
       <button id="wcTestBtn${c.id}" onclick="testWecom(${c.id})">连通</button>
       <button class="ghost" onclick='openWecomModal(${JSON.stringify(c)})'>编辑</button>
       <button class="danger" onclick="delWecom(${c.id},'${esc(c.name)}')">删除</button>
@@ -367,7 +361,7 @@ function openWecomModal(c){
   wcName.value = c ? c.name : "";
   wcBotId.value = c ? (c.bot_id||"") : "";
   wcBotKey.value = c ? (c.bot_key_mask||"") : "";   // 掩码回显，不改则保留原值
-  wcAuto.checked = !!(c && c.auto_approve);
+  wcAutoModal.checked = !!(c && c.auto_approve);
   document.getElementById("wecomMask").classList.add("show");
 }
 
@@ -375,7 +369,7 @@ async function saveWecom(){
   const id = wcId.value;
   const body = JSON.stringify({name: wcName.value.trim(),
     bot_id: wcBotId.value.trim(), bot_key: wcBotKey.value.trim(),
-    auto_approve: wcAuto.checked});
+    auto_approve: wcAutoModal.checked});
   try{
     if (id) await api(`/api/wecom/${id}`, {method:"PUT", body});
     else await api("/api/wecom", {method:"POST", body});
