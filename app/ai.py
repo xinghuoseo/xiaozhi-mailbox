@@ -24,6 +24,7 @@ def chat(prompt: str, system: str = "") -> str:
                    headers={"Authorization": f"Bearer {s['api_key']}"},
                    json={"model": s["model"], "messages": messages, "temperature": 0.6},
                    timeout=120)
+    _last_model_used = s["model"]
     if r.status_code != 200:
         raise RuntimeError(f"AI 接口返回 {r.status_code}: {r.text[:200]}")
     data = r.json()
@@ -57,14 +58,9 @@ def generate_daily_summary(date_str: str) -> dict:
         who = "孩子" if r["sender"] == "child" else "妈妈"
         lines.append(f"[{r['created_at'][11:16]}] {who}{'留言' if r['sender']=='child' else '回信'}：{r['content']}")
     transcript = "\n".join(lines)
-    prompt = (
-        f"以下是 {date_str} 这一天，孩子（通过小智AI语音设备）和妈妈之间的留言对话记录。\n\n"
-        f"{transcript}\n\n"
-        "请生成：\n"
-        '1. "short"：不超过15个字，概括当天交流的核心内容，语气温馨；\n'
-        '2. "full"：150字左右的当日对话完整总结，说明孩子和妈妈各自说了什么、当天交流的氛围。\n'
-        '只输出 JSON，格式：{"short":"...","full":"..."}'
-    )
+    # 提示词：优先使用控制台自定义模板（占位符 {date} {transcript}），为空用默认
+    tpl = get_settings().get("summary_prompt") or db.SUMMARY_PROMPT_DEFAULT
+    prompt = tpl.replace("{date}", date_str).replace("{transcript}", transcript)
     try:
         data = _extract_json(chat(prompt))
         short = (data.get("short") or "").strip()[:30]

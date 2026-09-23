@@ -150,11 +150,14 @@ th{color:#999;font-weight:500}
         <input id="aiModel" placeholder="MiniMax-M3">
         <label>接口地址</label>
         <input id="aiUrl" placeholder="https://api.minimaxi.com/v1/text/chatcompletion_v2">
-        <div class="ai-note">每日 00:05 自动调用 AI 生成前一天对话总结（15 字短总结 + 完整总结）。用于对话总结功能，不影响小智设备正常使用。</div>
+        <label>总结提示词（可用占位符：{date}=日期，{transcript}=当日对话记录；留空使用默认）</label>
+        <textarea id="aiPrompt" rows="9" style="font-family:monospace;font-size:12px;line-height:1.6"></textarea>
+        <div class="ai-note">默认提示词会要求 AI 一次性返回 JSON（含 15 字短总结 short 和完整总结 full 两个字段，一次调用同时得到）。清空此框保存即恢复默认。</div>
         <div class="btns">
           <button onclick="saveAI()">保存设置</button>
           <button class="ghost" id="aiTestBtn" onclick="testAI()">连通测试</button>
         </div>
+        <div class="ai-note">每日 00:05 自动调用 AI 生成前一天对话总结。用于对话总结功能，不影响小智设备正常使用。</div>
       </div>
     </div>
   </div>
@@ -572,11 +575,12 @@ async function loadAI(){
   aiKey.placeholder = s.has_key ? "已保存（输入新值可覆盖）" : "填入 MiniMax APIKey";
   aiModel.value = s.model;
   aiUrl.value = s.base_url;
+  aiPrompt.value = s.summary_prompt || "";
 }
 
 async function saveAI(){
   try{
-    await api("/api/ai/settings", {method:"POST", body: JSON.stringify({api_key: aiKey.value.trim(), model: aiModel.value.trim(), base_url: aiUrl.value.trim()})});
+    await api("/api/ai/settings", {method:"POST", body: JSON.stringify({api_key: aiKey.value.trim(), model: aiModel.value.trim(), base_url: aiUrl.value.trim(), summary_prompt: aiPrompt.value})});
     toast("AI 设置已保存"); loadAI();
   }catch(e){ toast(e.message, "err"); }
 }

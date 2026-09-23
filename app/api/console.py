@@ -166,7 +166,11 @@ async def save_ai_settings(request: Request, token: str = Depends(require_auth))
     # 掩码值表示未修改，保留原 key
     if not api_key or "****" in api_key or api_key == "已设置":
         api_key = ai.get_settings()["api_key"]
-    ai.save_settings(api_key, model, base_url)
+    # 总结提示词：未传则保留原值；传空字符串 = 恢复默认
+    summary_prompt = body.get("summary_prompt")
+    if summary_prompt is None:
+        summary_prompt = ai.get_settings().get("summary_prompt")
+    ai.save_settings(api_key, model, base_url, summary_prompt)
     return {"ok": True}
 
 @router.post("/api/ai/test")

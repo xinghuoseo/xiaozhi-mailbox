@@ -44,6 +44,10 @@ def init_db():
     if "nickname" not in nkcols:
         with get_db() as conn:
             conn.execute("ALTER TABLE wecom_members ADD COLUMN nickname TEXT NOT NULL DEFAULT ''")
+    acols = [r[1] for r in get_db().execute("PRAGMA table_info(ai_settings)").fetchall()]
+    if "summary_prompt" not in acols:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE ai_settings ADD COLUMN summary_prompt TEXT NOT NULL DEFAULT ''")
 
 # ---------- 设备 ----------
 def list_devices():
@@ -176,19 +180,32 @@ def update_password(username: str, password_hash: str, salt: str):
 DEFAULT_AI = {"api_key": "", "model": "MiniMax-M3",
               "base_url": "https://api.minimaxi.com/v1/text/chatcompletion_v2"}
 
+SUMMARY_PROMPT_DEFAULT = """以下是 {date} 这一天，孩子（通过小智AI语音设备）和妈妈之间的留言对话记录。
+
+{transcript}
+
+请生成：
+1. "short"：不超过15个字，概括当天交流的核心内容，语气温馨；
+2. "full"：150字左右的当日对话完整总结，说明孩子和妈妈各自说了什么、当天交流的氛围。
+只输出 JSON，格式：{"short":"...","full":"..."}"""
+
 def get_ai_settings() -> dict:
     with get_db() as conn:
         row = conn.execute("SELECT * FROM ai_settings WHERE id=1").fetchone()
     if not row:
-        return dict(DEFAULT_AI)
-    return {"api_key": row["api_key"], "model": row["model"], "base_url": row["base_url"]}
+        s = dict(DEFAULT_AI); s["summary_prompt"] = ""
+        return s
+    return {"api_key": row["api_key"], "model": row["model"], "base_url": row["base_url"],
+            "summary_prompt": row["summary_prompt"] or ""}
 
-def save_ai_settings(api_key: str, model: str, base_url: str):
+def save_ai_settings(api_key: str, model: str, base_url: str, summary_prompt: str = None):
     with get_db() as conn:
         conn.execute(
             "INSERT INTO ai_settings(id, api_key, model, base_url) VALUES(1,?,?,?) "
             "ON CONFLICT(id) DO UPDATE SET api_key=excluded.api_key, model=excluded.model, "
             "base_url=excluded.base_url", (api_key, model, base_url))
+        if summary_prompt is not None:
+            conn.execute("UPDATE ai_settings SET summary_prompt=? WHERE id=1", (summary_prompt,))
 
 # ---------- 企业微信配置 ----------
 def list_wecom_configs():

@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS ai_settings (
     id       INTEGER PRIMARY KEY CHECK (id = 1),
     api_key  TEXT NOT NULL DEFAULT '',
     model    TEXT NOT NULL DEFAULT 'MiniMax-M3',
-    base_url TEXT NOT NULL DEFAULT 'https://api.minimaxi.com/v1/text/chatcompletion_v2'
+    base_url TEXT NOT NULL DEFAULT 'https://api.minimaxi.com/v1/text/chatcompletion_v2',
+    summary_prompt TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS daily_summaries (
