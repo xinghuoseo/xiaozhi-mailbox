@@ -48,6 +48,10 @@ def init_db():
     if "summary_prompt" not in acols:
         with get_db() as conn:
             conn.execute("ALTER TABLE ai_settings ADD COLUMN summary_prompt TEXT NOT NULL DEFAULT ''")
+    # 数据修正：MiniMax 新平台端点（minimaxi.com 旧端点 → minimax.cn OpenAI 兼容端点）
+    with get_db() as conn:
+        conn.execute("UPDATE ai_settings SET base_url='https://api.minimax.cn/v1/chat/completions' "
+                     "WHERE base_url LIKE '%minimaxi.com%'")
 
 # ---------- 设备 ----------
 def list_devices():
@@ -178,7 +182,7 @@ def update_password(username: str, password_hash: str, salt: str):
 
 # ---------- AI 配置 ----------
 DEFAULT_AI = {"api_key": "", "model": "MiniMax-M3",
-              "base_url": "https://api.minimaxi.com/v1/text/chatcompletion_v2"}
+              "base_url": "https://api.minimax.cn/v1/chat/completions"}
 
 SUMMARY_PROMPT_DEFAULT = "请为下面这一天（{date}）孩子和妈妈之间的留言对话生成当日总结，语气温馨。"
 

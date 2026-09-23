@@ -43,7 +43,7 @@ def chat(prompt: str, system: str = "") -> str:
         raise RuntimeError(f"AI 接口返回 {r.status_code}: {r.text[:200]}")
     data = r.json()
     try:
-        return data["choices"][0]["message"]["content"].strip()
+        return _strip_think(data["choices"][0]["message"]["content"]).strip()
     except (KeyError, IndexError, TypeError):
         raise RuntimeError(f"AI 返回格式异常: {json.dumps(data, ensure_ascii=False)[:300]}")
 
@@ -55,7 +55,12 @@ def test_connection() -> dict:
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+def _strip_think(text: str) -> str:
+    """剥离 MiniMax 思考内容（<think>...</think> 包裹的自适应思考）"""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+
 def _extract_json(text: str) -> dict:
+    text = _strip_think(text)
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
         raise ValueError(f"AI 未返回 JSON: {text[:200]}")

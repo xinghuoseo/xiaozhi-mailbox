@@ -153,8 +153,12 @@ async def summary_generate(request: Request, token: str = Depends(require_auth))
 async def ai_settings(token: str = Depends(require_auth)):
     s = ai.get_settings()
     key = s["api_key"]
+    # MiniMax APIKey 通常 30 位以上；过短的 key 视为无效，提示重新填写
+    valid = bool(key) and len(key) >= 20
     s["api_key"] = (key[:6] + "****" + key[-4:]) if len(key) > 12 else ("已设置" if key else "")
-    s["has_key"] = bool(key)
+    s["has_key"] = valid
+    if key and not valid:
+        s["api_key"] = f"无效（当前仅{len(key)}字符，请重新填写完整APIKey）"
     return s
 
 @router.post("/api/ai/settings")
