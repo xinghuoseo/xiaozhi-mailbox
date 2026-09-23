@@ -161,28 +161,30 @@ def connected_map() -> dict:
     return {cid: bool(st["client"].connected) for cid, st in _state.items()}
 
 async def notify_child_message(content: str, config_ids=None, device_name: str = "小智设备") -> bool:
-    """孩子留言 → 通知所有已通过成员（按成员各自的会话发送：群聊@成员 / 私聊直发）。
-    config_ids 指定时只推这些配置（设备绑定），None=广播全部。返回是否至少成功送达一个成员。"""
+    """孩子留言 → 按来源会话发送：已通过成员的会话去重后（群/私聊），每个会话只发一次。
+    群聊直接发群里（全员可见，不逐个@）。config_ids 指定时只推这些配置，None=广播全部。"""
     from datetime import datetime
     stamp = datetime.now().strftime("%m-%d %H:%M")
     text = f"【{stamp}】{device_name} 留言：\n\n{content}"
     sent = False
     for config_id, st in list(_state.items()):
-        # config_ids 语义：None=广播全部；[]或列表=仅推指定配置（设备绑定）
         if config_ids is not None and config_id not in config_ids:
             continue
         if not st["client"].connected:
             continue
+        # 收集已通过成员的会话并去重（群会话 / 私聊会话）
+        targets = {}
         for m in db.list_approved_members(config_id):
-            target = m["chat_id"] if m["chat_type"] == "group" else m["userid"]
-            if not target:
-                continue
-            body = text + (f"\n<@{m['userid']}>" if m["chat_type"] == "group" else "")
+            if m["chat_type"] == "group" and m["chat_id"]:
+                targets[m["chat_id"]] = "group"
+            elif m["chat_type"] == "single" and m["userid"]:
+                targets[m["userid"]] = "single"
+        for target, ctype in targets.items():
             try:
-                await st["client"].send_markdown(target, body)
+                await st["client"].send_markdown(target, text)
                 sent = True
             except Exception as e:
-                log.warning("通知成员%s 失败: %s", m["userid"], e)
+                log.warning("通知会话%s 失败: %s", target, e)
     return sent
 
 # ---------- 连通测试（独立短连接） ----------
