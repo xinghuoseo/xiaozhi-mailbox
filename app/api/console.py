@@ -203,7 +203,6 @@ def _wecom_out(cfg) -> dict:
     return {"id": cfg["id"], "name": cfg["name"],
             "bot_id": cfg["bot_id"] or "", "bot_key_mask": _mask(cfg["bot_key"]),
             "chat_id": cfg["chat_id"], "auto_approve": bool(cfg["auto_approve"]),
-            "webhook_url": cfg["webhook_url"] or "",
             "connected": _bot_connected(cfg["id"])}
 
 @router.get("/api/wecom")
@@ -221,7 +220,6 @@ async def wecom_add(request: Request, token: str = Depends(require_auth)):
     if not bot_id or not bot_key:
         raise HTTPException(status_code=400, detail="Bot ID 和 Secret 不能为空")
     cid = db.add_wecom(name, bot_id, bot_key)
-    db.set_wecom_webhook(cid, body.get("webhook_url") or "")
     from .. import wecom_bot
     wecom_bot.restart_one(cid)
     return {"ok": True, "id": cid}
@@ -242,7 +240,7 @@ async def wecom_edit(config_id: int, request: Request, token: str = Depends(requ
         raise HTTPException(status_code=400, detail="Bot ID 和 Secret 不能为空")
     db.update_wecom(config_id, name, bot_id, bot_key)
     db.set_wecom_auto_approve(config_id, 1 if body.get("auto_approve") else 0)
-    db.set_wecom_webhook(config_id, body.get("webhook_url") or "")
+
     from .. import wecom_bot
     wecom_bot.restart_one(config_id)
     return {"ok": True}

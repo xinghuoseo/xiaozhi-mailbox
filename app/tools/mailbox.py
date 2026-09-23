@@ -6,24 +6,26 @@ async def send_message_to_mom(content: str, device_id: int = 0) -> dict:
     if not content or len(content) < 2:
         return {"success": False, "result": "没有听清你要留言的内容，再说一遍好吗"}
     mid = db.add_message("child", content, "voice", device_id)
-    pushed = False
+    pushed = None   # None=设备未绑定接收端（不通知）；True/False=绑定后推送结果
     try:
         from .. import wecom_bot
-        config_ids = None          # None = 设备未绑定配置 → 通知所有接收配置（广播）
         device_name = "小智设备"
+        config_ids = []
         if device_id:
             d = db.get_device(device_id)
             if d:
                 device_name = d["name"] or device_name
                 if d["wecom_config_id"]:
-                    # 设备已绑定接收配置 → 只走该配置的长连接/Webhook
+                    # 设备已绑定接收端 → 只走该接收端的长连接
                     config_ids = [d["wecom_config_id"]]
-        pushed = await wecom_bot.notify_child_message(content, config_ids, device_name)
+                    pushed = await wecom_bot.notify_child_message(content, config_ids, device_name)
     except Exception:
         pass
     if pushed:
         db.mark_child_pushed(mid)                 # 推送成功 → 标记已送达
         return {"success": True, "result": "妈妈已经收到你的留言啦，她马上就能看到哦"}
+    if pushed is None:
+        return {"success": True, "result": "你的留言我已经记好啦"}
     return {"success": True, "result": "你的留言我记好啦。不过妈妈那边暂时没通知到，等会儿再说一次好吗"}
 
 def read_messages_from_mom(limit: int = 5, device_id: int = 0) -> dict:

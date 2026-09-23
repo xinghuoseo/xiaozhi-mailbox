@@ -208,8 +208,6 @@ th{color:#999;font-weight:500}
     <div id="wcBotFields">
       <label>Bot ID</label><input id="wcBotId" placeholder="企微后台长连接模式生成">
       <label>Secret</label><input id="wcBotKey" placeholder="企微后台长连接模式生成">
-      <label>通知 Webhook 地址（主动推送地址）</label>
-      <input id="wcWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
       <div style="margin-top:14px;display:flex;align-items:center;gap:8px;text-align:left">
         <input type="checkbox" id="wcAutoModal" style="width:16px;height:16px;margin:0;accent-color:#4f6ef7;flex-shrink:0">
         <label for="wcAutoModal" style="cursor:pointer;margin:0;font-size:14px;color:#333;white-space:nowrap">新成员自动通过（无需审核）</label>
@@ -394,7 +392,6 @@ function openWecomModal(c){
   wcName.value = c ? c.name : "";
   wcBotId.value = c ? (c.bot_id||"") : "";
   wcBotKey.value = c ? (c.bot_key_mask||"") : "";   // 掩码回显，不改则保留原值
-  wcWebhook.value = c ? (c.webhook_url||"") : "";
   wcAutoModal.checked = !!(c && c.auto_approve);
   document.getElementById("wecomMask").classList.add("show");
 }
@@ -403,7 +400,7 @@ async function saveWecom(){
   const id = wcId.value;
   const body = JSON.stringify({name: wcName.value.trim(),
     bot_id: wcBotId.value.trim(), bot_key: wcBotKey.value.trim(),
-    webhook_url: wcWebhook.value.trim(), auto_approve: wcAutoModal.checked});
+auto_approve: wcAutoModal.checked});
   try{
     if (id) await api(`/api/wecom/${id}`, {method:"PUT", body});
     else await api("/api/wecom", {method:"POST", body});
@@ -436,7 +433,7 @@ async function loadDevices(){
     <td><b>${esc(d.name)}</b></td>
     <td>${esc(d.agent_id)}</td>
     <td><span class="dot ${d.connected?"on":"off"}"></span>${d.connected?"已连接":"未连接"}</td>
-    <td>${d.wecom_name ? esc(d.wecom_name) : "<i style='color:#999'>未绑定</i>"}</td>
+    <td>${d.wecom_name ? esc(d.wecom_name) : "<i style='color:#999'>无绑定接收端</i>"}</td>
     <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#999">${esc(d.endpoint.slice(0,42))}…</td>
     <td class="ops-cell">
       <button id="testBtn${d.id}" onclick="testDevice(${d.id})">连通测试</button>

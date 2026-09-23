@@ -233,10 +233,6 @@ def update_wecom(config_id: int, name: str, bot_id: str, bot_key: str):
         conn.execute("UPDATE wecom_configs SET name=?, bot_id=?, bot_key=? WHERE id=?",
                      (name, bot_id, bot_key, config_id))
 
-def set_wecom_webhook(config_id: int, webhook_url: str):
-    with get_db() as conn:
-        conn.execute("UPDATE wecom_configs SET webhook_url=? WHERE id=?", (webhook_url.strip(), config_id))
-
 def set_wecom_auto_approve(config_id: int, auto: int):
     with get_db() as conn:
         conn.execute("UPDATE wecom_configs SET auto_approve=? WHERE id=?", (auto, config_id))

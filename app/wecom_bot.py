@@ -167,37 +167,24 @@ async def notify_child_message(content: str, config_ids=None, device_name: str =
     stamp = datetime.now().strftime("%m-%d %H:%M")
     text = f"【{stamp}】{device_name} 留言：\n\n{content}"
     sent = False
-    import httpx
     for config_id, st in list(_state.items()):
-        if config_ids and config_id not in config_ids:
+        # config_ids 语义：None=广播全部；[]或列表=仅推指定配置（设备绑定）
+        if config_ids is not None and config_id not in config_ids:
             continue
         cfg = db.get_wecom(config_id)
-        if not cfg:
+        if not cfg or not st["client"].connected:
             continue
-        # 通道1：Webhook（群机器人消息推送，不依赖长连接）
-        if cfg["webhook_url"]:
-            try:
-                r = httpx.post(cfg["webhook_url"], json={
-                    "msgtype": "markdown", "markdown": {"content": text}}, timeout=10)
-                if r.json().get("errcode") == 0:
-                    sent = True
-                else:
-                    log.warning("Webhook 推送失败: %s", r.text[:100])
-            except Exception as e:
-                log.warning("Webhook 推送异常: %s", e)
-        # 通道2：长连接推送（群会话 + 单聊）
-        if st["client"].connected:
-            try:
-                if cfg["chat_id"]:
-                    await st["client"].send_markdown(cfg["chat_id"], text)
-                    sent = True
-                if cfg["mom_user"]:
-                    try:
-                        await st["client"].send_markdown(cfg["mom_user"], text)
-                    except Exception as e:
-                        log.warning("机器人单聊通知失败: %s", e)
-            except Exception as e:
-                log.warning("机器人%s 群通知失败: %s", config_id, e)
+        try:
+            if cfg["chat_id"]:
+                await st["client"].send_markdown(cfg["chat_id"], text)
+                sent = True
+            if cfg["mom_user"]:
+                try:
+                    await st["client"].send_markdown(cfg["mom_user"], text)
+                except Exception as e:
+                    log.warning("机器人单聊通知失败: %s", e)
+        except Exception as e:
+            log.warning("机器人%s 群通知失败: %s", config_id, e)
     return sent
 
 # ---------- 连通测试（独立短连接） ----------
