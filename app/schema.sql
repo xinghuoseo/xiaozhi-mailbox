@@ -57,7 +57,18 @@ CREATE TABLE IF NOT EXISTS wecom_configs (
     mom_user  TEXT NOT NULL DEFAULT '',
     chat_id   TEXT NOT NULL DEFAULT '',
     enabled   INTEGER NOT NULL DEFAULT 1,
+    auto_approve INTEGER NOT NULL DEFAULT 0,   -- 1=新成员自动通过 0=需人工审批
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS wecom_members (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    config_id  INTEGER NOT NULL,                 -- 所属企微配置
+    userid     TEXT NOT NULL,                    -- 企微成员账号
+    status     TEXT NOT NULL DEFAULT 'pending',  -- pending/approved/denied
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    decided_at TEXT,
+    UNIQUE(config_id, userid)
 );
 
 CREATE TABLE IF NOT EXISTS auth_tokens (

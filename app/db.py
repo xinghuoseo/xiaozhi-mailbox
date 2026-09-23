@@ -25,6 +25,11 @@ def init_db():
         if col not in wcols:
             with get_db() as conn:
                 conn.execute(f"ALTER TABLE wecom_configs ADD COLUMN {col} {ddl}")
+    # 旧表迁移：wecom_configs 补 auto_approve 列
+    wcols = [r[1] for r in get_db().execute("PRAGMA table_info(wecom_configs)").fetchall()]
+    if "auto_approve" not in wcols:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE wecom_configs ADD COLUMN auto_approve INTEGER NOT NULL DEFAULT 0")
     # 旧表迁移：devices 补 wecom_config_id 列
     dcols = [r[1] for r in get_db().execute("PRAGMA table_info(devices)").fetchall()]
     if "wecom_config_id" not in dcols:
@@ -199,6 +204,10 @@ def update_wecom(config_id: int, name: str, bot_id: str, bot_key: str):
         conn.execute("UPDATE wecom_configs SET name=?, bot_id=?, bot_key=? WHERE id=?",
                      (name, bot_id, bot_key, config_id))
 
+def set_wecom_auto_approve(config_id: int, auto: int):
+    with get_db() as conn:
+        conn.execute("UPDATE wecom_configs SET auto_approve=? WHERE id=?", (auto, config_id))
+
 def update_wecom_user(config_id: int, mom_user: str):
     with get_db() as conn:
         conn.execute("UPDATE wecom_configs SET mom_user=? WHERE id=?", (mom_user, config_id))
@@ -232,3 +241,39 @@ def delete_user_tokens(username: str):
 def purge_expired_tokens(now: float):
     with get_db() as conn:
         conn.execute("DELETE FROM auth_tokens WHERE expires < ?", (now,))
+
+
+# ---------- 企微成员名单 ----------
+def get_wecom_member(config_id: int, userid: str):
+    with get_db() as conn:
+        return conn.execute("SELECT * FROM wecom_members WHERE config_id=? AND userid=?",
+                            (config_id, userid)).fetchone()
+
+def has_approved_member(config_id: int) -> bool:
+    with get_db() as conn:
+        return conn.execute("SELECT 1 FROM wecom_members WHERE config_id=? AND status='approved' LIMIT 1",
+                            (config_id,)).fetchone() is not None
+
+def add_wecom_member(config_id: int, userid: str, status: str) -> bool:
+    """新增成员，返回是否为新插入"""
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO wecom_members(config_id, userid, status) VALUES(?,?,?)",
+            (config_id, userid, status))
+        return cur.rowcount > 0
+
+def set_wecom_member_status(member_id: int, status: str):
+    with get_db() as conn:
+        conn.execute("UPDATE wecom_members SET status=?, decided_at=datetime('now','localtime') WHERE id=?",
+                     (status, member_id))
+
+def delete_wecom_member(member_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM wecom_members WHERE id=?", (member_id,))
+
+def list_wecom_members(config_id: int = None):
+    with get_db() as conn:
+        if config_id:
+            return conn.execute("SELECT * FROM wecom_members WHERE config_id=? ORDER BY id DESC",
+                                (config_id,)).fetchall()
+        return conn.execute("SELECT * FROM wecom_members ORDER BY id DESC").fetchall()

@@ -193,7 +193,7 @@ def _bot_connected(config_id: int) -> bool:
 def _wecom_out(cfg) -> dict:
     return {"id": cfg["id"], "name": cfg["name"],
             "bot_id": cfg["bot_id"] or "", "bot_key_mask": _mask(cfg["bot_key"]),
-            "chat_id": cfg["chat_id"],
+            "chat_id": cfg["chat_id"], "auto_approve": bool(cfg["auto_approve"]),
             "connected": _bot_connected(cfg["id"])}
 
 @router.get("/api/wecom")
@@ -230,6 +230,7 @@ async def wecom_edit(config_id: int, request: Request, token: str = Depends(requ
     if not (bot_id and bot_key):
         raise HTTPException(status_code=400, detail="Bot ID 和 Secret 不能为空")
     db.update_wecom(config_id, name, bot_id, bot_key)
+    db.set_wecom_auto_approve(config_id, 1 if body.get("auto_approve") else 0)
     from .. import wecom_bot
     wecom_bot.restart_one(config_id)
     return {"ok": True}
@@ -239,6 +240,26 @@ async def wecom_del(config_id: int, token: str = Depends(require_auth)):
     from .. import wecom_bot
     wecom_bot.stop_one(config_id)
     db.delete_wecom(config_id)
+    return {"ok": True}
+
+@router.get("/api/wecom/members")
+async def member_list(config_id: int = 0, token: str = Depends(require_auth)):
+    rows = db.list_wecom_members(config_id or None)
+    cnames = {c["id"]: c["name"] for c in db.list_wecom_configs()}
+    return [{"id": m["id"], "config_id": m["config_id"], "config_name": cnames.get(m["config_id"], "-"),
+             "userid": m["userid"], "status": m["status"], "created_at": m["created_at"],
+             "decided_at": m["decided_at"] or ""} for m in rows]
+
+@router.post("/api/wecom/members/{member_id}/{action}")
+async def member_action(member_id: int, action: str, token: str = Depends(require_auth)):
+    if action == "approve":
+        db.set_wecom_member_status(member_id, "approved")
+    elif action == "deny":
+        db.set_wecom_member_status(member_id, "denied")
+    elif action == "delete":
+        db.delete_wecom_member(member_id)
+    else:
+        raise HTTPException(status_code=400, detail="不支持的操作")
     return {"ok": True}
 
 @router.post("/api/wecom/{config_id}/send")

@@ -95,7 +95,22 @@ class WeComBotClient:
                 self.cfg["mom_user"] = userid
         except Exception:
             pass
-        # 指令（仅企微端）：查信息 / @帮助
+        # ---- 成员名单校验（企微端准入）----
+        member = db.get_wecom_member(self.cfg["id"], userid) if userid else None
+        if member is None and userid:
+            # 该配置还没有任何已通过成员时，首个发消息者视为管理员自动通过
+            first = not db.has_approved_member(self.cfg["id"])
+            new_status = "approved" if (first or self.cfg.get("auto_approve")) else "pending"
+            db.add_wecom_member(self.cfg["id"], userid, new_status)
+            if new_status != "approved":
+                stream_id = generate_req_id("stream")
+                await self.client.reply_stream(frame, stream_id,
+                    "📮 你好！使用信箱需要管理员开通权限，已为你提交申请，请等待管理员在控制台通过。", True)
+                return
+            member = db.get_wecom_member(self.cfg["id"], userid)
+        if member and member["status"] != "approved":
+            return   # 未通过/已拒绝：静默忽略
+        # ---- 已通过成员：指令 / 回信 ----
         reply = wecom.handle_command(content)
         if reply:
             stream_id = generate_req_id("stream")
@@ -140,10 +155,12 @@ def restart_one(config_id: int):
 def connected_map() -> dict:
     return {cid: bool(st["client"].connected) for cid, st in _state.items()}
 
-async def notify_child_message(content: str, config_ids=None) -> bool:
+async def notify_child_message(content: str, config_ids=None, device_name: str = "小智设备") -> bool:
     """孩子留言 → 同步推送到机器人群/单聊；config_ids 指定时只推这些配置（设备绑定），否则推全部。
     返回是否至少成功送达一个目标。"""
-    text = f"mailbox!孩子刚刚留言啦：\n\n{content}\n\n（回复机器人消息即可回信给孩子）"
+    from datetime import datetime
+    stamp = datetime.now().strftime("%m-%d %H:%M")
+    text = f"[{stamp}] {device_name} 留言：\n{content}"
     sent = False
     for config_id, st in list(_state.items()):
         if config_ids and config_id not in config_ids:

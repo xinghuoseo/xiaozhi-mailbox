@@ -77,6 +77,9 @@ th{color:#999;font-weight:500}
 .modal h3{margin-bottom:16px}
 .modal label{display:block;margin:12px 0 6px;color:#666;font-size:13px}
 .modal .btns{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.sub-menu{padding:10px 14px;border-radius:6px;cursor:pointer;color:#666;margin-bottom:4px}
+.sub-menu:hover{background:#f0f3ff}
+.sub-menu.active{background:#eef1ff;color:#4f6ef7;font-weight:600}
 /* toast */
 #toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;display:none;z-index:999}
 #toast.ok{background:#22b07d}#toast.err{background:#e5484d}
@@ -104,7 +107,7 @@ th{color:#999;font-weight:500}
       <a class="active" data-tab="devices" onclick="switchTab('devices')">设备</a>
       <a data-tab="records" onclick="switchTab('records')">记录</a>
       <a data-tab="ai" onclick="switchTab('ai')">AI设置</a>
-      <a data-tab="wecom" onclick="switchTab('wecom')">企微配置</a>
+      <a data-tab="wecom" onclick="switchTab('wecom')">接收配置</a>
     </div>
     <div class="ops"><a onclick="openPwdModal()">修改密码</a><a onclick="doLogout()">退出</a></div>
   </div>
@@ -157,6 +160,12 @@ th{color:#999;font-weight:500}
   </div>
 <!-- 企微配置页 -->
   <div class="page" id="page-wecom">
+    <div style="display:flex;gap:14px;align-items:flex-start">
+    <div class="card" style="width:140px;flex-shrink:0;padding:8px">
+      <div class="sub-menu active" data-sub="cfg" onclick="switchWecomSub('cfg')">接收配置</div>
+      <div class="sub-menu" data-sub="apply" onclick="switchWecomSub('apply')">申请列表</div>
+    </div>
+    <div style="flex:1;min-width:0" id="wecomSub-cfg">
     <div class="card" style="margin-bottom:14px">
       <b>使用说明</b>
       <div class="ai-note">
@@ -170,6 +179,22 @@ th{color:#999;font-weight:500}
       <div class="dev-head"><b>企微应用配置</b><button onclick="openWecomModal()">+ 添加配置</button></div>
       <table><thead><tr><th>名称</th><th>Bot ID</th><th>Secret</th><th>群会话</th><th>连接状态</th><th>操作</th></tr></thead>
       <tbody id="wecomTbody"></tbody></table>
+      <div style="margin-top:12px">
+        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="wcAuto" onchange="toggleAutoApprove(this.checked)">
+          新成员自动通过（关闭后：新成员 @机器人 发消息会进入申请列表，需人工通过）
+        </label>
+      </div>
+    </div>
+    </div>
+    <div style="flex:1;min-width:0;display:none" id="wecomSub-apply">
+      <div class="card">
+        <b>成员 / 申请列表</b>
+        <p class="ai-note">群或单聊里 @机器人 发消息的新成员会进入申请（状态待通过），通过后即可回信与使用指令。</p>
+        <table><thead><tr><th>用户ID</th><th>所属配置</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+        <tbody id="memberTbody"></tbody></table>
+      </div>
+    </div>
     </div>
   </div>
 
@@ -186,6 +211,11 @@ th{color:#999;font-weight:500}
       <label>Bot ID</label><input id="wcBotId" placeholder="企微后台长连接模式生成">
       <label>Secret</label><input id="wcBotKey" placeholder="企微后台长连接模式生成">
       <div class="ai-note">长连接模式无需公网回调地址，也不用填接收人和群ID —— 机器人进群后 @它 发条消息，系统自动记录群会话用于通知。注意：企微官方规则，群聊里需 @机器人 才能收到消息；机器人单聊直接发即可。</div>
+    </div>
+    <div style="margin-top:12px">
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="wcAuto"> 新成员自动通过
+      </label>
     </div>
     <div class="btns"><button class="ghost" onclick="closeMask('wecomMask')">取消</button><button onclick="saveWecom()">保存</button></div>
   </div>
@@ -271,7 +301,47 @@ function switchTab(name){
   if (name==="devices") loadDevices();
   if (name==="records") loadDays();
   if (name==="ai") loadAI();
-  if (name==="wecom") loadWecom();
+  if (name==="wecom") { loadWecom(); loadMembers(); }
+}
+
+function switchWecomSub(sub){
+  document.querySelectorAll(".sub-menu").forEach(m=>m.classList.toggle("active", m.dataset.sub===sub));
+  document.getElementById("wecomSub-cfg").style.display = sub==="cfg" ? "" : "none";
+  document.getElementById("wecomSub-apply").style.display = sub==="apply" ? "" : "none";
+}
+
+/* ---------- 成员/申请列表 ---------- */
+async function loadMembers(){
+  const list = await api("/api/wecom/members");
+  const tb = document.getElementById("memberTbody");
+  const stMap = {approved:"<span class='dot on'></span>已通过", pending:"<span class='dot off'></span>待通过", denied:"<span class='dot off'></span>已拒绝"};
+  tb.innerHTML = list.map(m=>`<tr>
+    <td><b>${esc(m.userid)}</b></td>
+    <td>${esc(m.config_name)}</td>
+    <td>${stMap[m.status]||m.status}</td>
+    <td><small>${m.decided_at||m.created_at}</small></td>
+    <td class="ops-cell">
+      ${m.status!=="approved"?`<button onclick="memberAction(${m.id},'approve')">通过</button>`:""}
+      ${m.status!=="denied"?`<button class="ghost" onclick="memberAction(${m.id},'deny')">拒绝</button>`:""}
+      <button class="danger" onclick="memberAction(${m.id},'delete')">删除</button>
+    </td></tr>`).join("") || `<tr><td colspan="5"><div class="empty">暂无成员/申请（群成员 @机器人 发消息后出现在这里）</div></td></tr>`;
+}
+
+async function memberAction(id, action){
+  try{
+    await api(`/api/wecom/members/${id}/${action}`, {method:"POST"});
+    toast(action==="approve"?"已通过":action==="deny"?"已拒绝":"已删除");
+    loadMembers();
+  }catch(e){ toast(e.message, "err"); }
+}
+
+async function toggleAutoApprove(v){
+  const list = await api("/api/wecom");
+  for (const c of list){
+    await api(`/api/wecom/${c.id}`, {method:"PUT",
+      body: JSON.stringify({name:c.name, bot_id:c.bot_id, bot_key:"已设置", auto_approve: v})});
+  }
+  toast(v ? "已开启：新成员自动通过" : "已关闭：新成员需人工通过");
 }
 
 /* ---------- 企微配置 ---------- */
@@ -297,13 +367,15 @@ function openWecomModal(c){
   wcName.value = c ? c.name : "";
   wcBotId.value = c ? (c.bot_id||"") : "";
   wcBotKey.value = c ? (c.bot_key_mask||"") : "";   // 掩码回显，不改则保留原值
+  wcAuto.checked = !!(c && c.auto_approve);
   document.getElementById("wecomMask").classList.add("show");
 }
 
 async function saveWecom(){
   const id = wcId.value;
   const body = JSON.stringify({name: wcName.value.trim(),
-    bot_id: wcBotId.value.trim(), bot_key: wcBotKey.value.trim()});
+    bot_id: wcBotId.value.trim(), bot_key: wcBotKey.value.trim(),
+    auto_approve: wcAuto.checked});
   try{
     if (id) await api(`/api/wecom/${id}`, {method:"PUT", body});
     else await api("/api/wecom", {method:"POST", body});
