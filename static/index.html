@@ -278,8 +278,15 @@ function showApp(){ document.getElementById("loginView").style.display="none"; d
 
 async function doLogin(){
   const u = liUser.value.trim(), p = liPass.value;
-  const r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({username:u, password:p})});
+  loginErr.textContent = "正在登录…";
+  let r;
+  try{
+    r = await fetch("/api/login", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({username:u, password:p})});
+  }catch(e){
+    loginErr.textContent = "网络异常，请刷新页面（Ctrl+F5 强制刷新）后重试";
+    return;
+  }
   if (!r.ok){
     let msg = "账号或密码错误";
     try{ msg = (await r.json()).detail || msg; }catch(e){}
