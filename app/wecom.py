@@ -57,7 +57,7 @@ def handle_command(text: str):
         rows = db.unread_mom_messages(20)
         if not rows:
             return "📭 暂时没有未读的留言，孩子都听过啦"
-        lines = [f"留言时间：{r['created_at'][5:16]}\n留言内容：{r['content'][:80]}" for r in rows]
+        lines = [f"{r['created_at'][5:16]}：{r['content'][:80]}" for r in rows]
         return f"📬 还有 {len(rows)} 条未听过。\n\n" + "\n\n".join(lines)
     return None
 
