@@ -48,6 +48,10 @@ def init_db():
     if "summary_prompt" not in acols:
         with get_db() as conn:
             conn.execute("ALTER TABLE ai_settings ADD COLUMN summary_prompt TEXT NOT NULL DEFAULT ''")
+    wcols2 = [r[1] for r in get_db().execute("PRAGMA table_info(wecom_configs)").fetchall()]
+    if "webhook_url" not in wcols2:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE wecom_configs ADD COLUMN webhook_url TEXT NOT NULL DEFAULT ''")
     # 数据修正：MiniMax 新平台端点（minimaxi.com 旧端点 → minimax.cn OpenAI 兼容端点）
     with get_db() as conn:
         conn.execute("UPDATE ai_settings SET base_url='https://api.minimax.cn/v1/chat/completions' "
@@ -228,6 +232,10 @@ def update_wecom(config_id: int, name: str, bot_id: str, bot_key: str):
     with get_db() as conn:
         conn.execute("UPDATE wecom_configs SET name=?, bot_id=?, bot_key=? WHERE id=?",
                      (name, bot_id, bot_key, config_id))
+
+def set_wecom_webhook(config_id: int, webhook_url: str):
+    with get_db() as conn:
+        conn.execute("UPDATE wecom_configs SET webhook_url=? WHERE id=?", (webhook_url.strip(), config_id))
 
 def set_wecom_auto_approve(config_id: int, auto: int):
     with get_db() as conn:

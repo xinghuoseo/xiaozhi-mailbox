@@ -208,6 +208,8 @@ th{color:#999;font-weight:500}
     <div id="wcBotFields">
       <label>Bot ID</label><input id="wcBotId" placeholder="企微后台长连接模式生成">
       <label>Secret</label><input id="wcBotKey" placeholder="企微后台长连接模式生成">
+      <label>通知 Webhook 地址（可选，群机器人消息推送，填写后通知多走一条通道）</label>
+      <input id="wcWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
       <div style="margin-top:14px;display:flex;align-items:center;gap:8px;text-align:left">
         <input type="checkbox" id="wcAutoModal" style="width:16px;height:16px;margin:0;accent-color:#4f6ef7;flex-shrink:0">
         <label for="wcAutoModal" style="cursor:pointer;margin:0;font-size:14px;color:#333;white-space:nowrap">新成员自动通过（无需审核）</label>
@@ -392,6 +394,7 @@ function openWecomModal(c){
   wcName.value = c ? c.name : "";
   wcBotId.value = c ? (c.bot_id||"") : "";
   wcBotKey.value = c ? (c.bot_key_mask||"") : "";   // 掩码回显，不改则保留原值
+  wcWebhook.value = c ? (c.webhook_url||"") : "";
   wcAutoModal.checked = !!(c && c.auto_approve);
   document.getElementById("wecomMask").classList.add("show");
 }
@@ -400,7 +403,7 @@ async function saveWecom(){
   const id = wcId.value;
   const body = JSON.stringify({name: wcName.value.trim(),
     bot_id: wcBotId.value.trim(), bot_key: wcBotKey.value.trim(),
-    auto_approve: wcAutoModal.checked});
+    webhook_url: wcWebhook.value.trim(), auto_approve: wcAutoModal.checked});
   try{
     if (id) await api(`/api/wecom/${id}`, {method:"PUT", body});
     else await api("/api/wecom", {method:"POST", body});

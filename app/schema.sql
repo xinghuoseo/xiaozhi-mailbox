@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS wecom_configs (
     chat_id   TEXT NOT NULL DEFAULT '',
     enabled   INTEGER NOT NULL DEFAULT 1,
     auto_approve INTEGER NOT NULL DEFAULT 0,   -- 1=新成员自动通过 0=需人工审批
+    webhook_url TEXT NOT NULL DEFAULT '',      -- 通知 Webhook（群机器人消息推送地址，可选）
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
