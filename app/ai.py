@@ -8,8 +8,8 @@ log = logging.getLogger("ai")
 def get_settings() -> dict:
     return db.get_ai_settings()
 
-def save_settings(api_key: str, model: str, base_url: str):
-    db.save_ai_settings(api_key.strip(), model.strip(), base_url.strip())
+def save_settings(api_key: str, model: str, base_url: str, summary_prompt: str = None):
+    db.save_ai_settings(api_key.strip(), model.strip(), base_url.strip(), summary_prompt)
 
 # ===== 总结提示词三段式：我的提示词(用户可编辑) + 内容表达词(系统) + 输出结构词(系统) =====
 OUTPUT_RULES = """
