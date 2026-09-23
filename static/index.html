@@ -344,7 +344,7 @@ async function loadMembers(){
       ${m.status!=="approved"?`<button onclick="memberAction(${m.id},'approve')">通过</button>`:""}
       ${m.status!=="denied"?`<button class="ghost" onclick="memberAction(${m.id},'deny')">拒绝</button>`:""}
       <button class="danger" onclick="memberAction(${m.id},'delete')">删除</button>
-    </td></tr>`).join("") || `<tr><td colspan="6"><div class="empty">暂无成员/申请（群成员 @机器人 发消息后出现在这里）</div></td></tr>`;
+    </td></tr>`}).join("") || `<tr><td colspan="7"><div class="empty">暂无成员/申请（群成员 @机器人 发消息后出现在这里）</div></td></tr>`;
 }
 
 function openNickModal(m){
