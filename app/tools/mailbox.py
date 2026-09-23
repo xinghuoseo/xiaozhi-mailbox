@@ -9,13 +9,14 @@ async def send_message_to_mom(content: str, device_id: int = 0) -> dict:
     pushed = False
     try:
         from .. import wecom_bot
-        config_ids = None
+        config_ids = None          # None = 设备未绑定配置 → 通知所有接收配置（广播）
         device_name = "小智设备"
         if device_id:
-            d = db.get_device(device_id)          # 设备绑定了企微配置则只通知该配置
+            d = db.get_device(device_id)
             if d:
                 device_name = d["name"] or device_name
                 if d["wecom_config_id"]:
+                    # 设备已绑定接收配置 → 只走该配置的长连接/Webhook
                     config_ids = [d["wecom_config_id"]]
         pushed = await wecom_bot.notify_child_message(content, config_ids, device_name)
     except Exception:

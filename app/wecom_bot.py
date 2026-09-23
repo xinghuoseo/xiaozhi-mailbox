@@ -86,13 +86,15 @@ class WeComBotClient:
         userid = (body.get("from") or {}).get("userid") or ""
         # 回填会话标识（通知用）
         try:
-            if chattype == "group" and chatid and chatid != self.cfg.get("chat_id"):
+            # 会话绑定：仅首次记录（绑定关系稳定，不被后续会话覆盖）
+            if chattype == "group" and chatid and not self.cfg.get("chat_id"):
                 db.update_wecom_chatid(self.cfg["id"], chatid)
                 self.cfg["chat_id"] = chatid
-                log.info("机器人%s 已记录群会话 %s", self.cfg["id"], chatid)
-            elif chattype == "single" and userid and userid != self.cfg.get("mom_user"):
+                log.info("机器人%s 已绑定群会话 %s", self.cfg["id"], chatid)
+            elif chattype == "single" and userid and not self.cfg.get("mom_user"):
                 db.update_wecom_user(self.cfg["id"], userid)
                 self.cfg["mom_user"] = userid
+                log.info("机器人%s 已绑定单聊会话 %s", self.cfg["id"], userid)
         except Exception:
             pass
         # ---- 成员名单校验（企微端准入）----
