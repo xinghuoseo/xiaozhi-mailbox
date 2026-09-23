@@ -258,6 +258,7 @@ async def member_list(config_id: int = 0, token: str = Depends(require_auth)):
     cnames = {c["id"]: c["name"] for c in db.list_wecom_configs()}
     return [{"id": m["id"], "config_id": m["config_id"], "config_name": cnames.get(m["config_id"], "-"),
              "userid": m["userid"], "nickname": m["nickname"], "status": m["status"],
+             "chat_id": m["chat_id"], "chat_type": m["chat_type"],
              "created_at": m["created_at"], "decided_at": m["decided_at"] or ""} for m in rows]
 
 @router.post("/api/wecom/members/{member_id}/edit")

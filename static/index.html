@@ -189,7 +189,7 @@ th{color:#999;font-weight:500}
       <div class="card">
         <b>成员 / 申请列表</b>
         <p class="ai-note">群或单聊里 @机器人 发消息的新成员会进入申请（状态待通过），通过后即可回信与使用指令。编辑"身份"后，孩子的读留言会播报该身份。</p>
-        <table><thead><tr><th>用户ID</th><th>身份</th><th>所属配置</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+        <table><thead><tr><th>用户ID</th><th>身份</th><th>来源</th><th>所属配置</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
         <tbody id="memberTbody"></tbody></table>
       </div>
     </div>
@@ -323,14 +323,17 @@ async function loadMembers(){
   const list = await api("/api/wecom/members");
   const tb = document.getElementById("memberTbody");
   const stMap = {approved:"<span class='dot on'></span>已通过", pending:"<span class='dot off'></span>待通过", denied:"<span class='dot off'></span>已拒绝"};
-  tb.innerHTML = list.map(m=>`<tr>
+  tb.innerHTML = list.map(m=>{
+    const srcText = m.chat_type === "group" ? `群 ${esc(m.chat_id.slice(0,14))}…` : "私聊";
+    return `<tr>
     <td><b>${esc(m.userid)}</b></td>
     <td>${esc(m.nickname)||'<i style="color:#999">未设置</i>'}</td>
+    <td>${srcText}</td>
     <td>${esc(m.config_name)}</td>
     <td>${stMap[m.status]||m.status}</td>
     <td><small>${m.decided_at||m.created_at}</small></td>
-    <td class="ops-cell">
-      <button class="ghost" onclick='openNickModal(${JSON.stringify({id:m.id,nickname:m.nickname})})'>编辑</button>
+    <td class="ops-cell" style="width:200px">
+      <button class="ghost" onclick='openNickModal(${JSON.stringify({id:m.id,nickname:m.nickname,userid:m.userid})})'>编辑</button>
       ${m.status!=="approved"?`<button onclick="memberAction(${m.id},'approve')">通过</button>`:""}
       ${m.status!=="denied"?`<button class="ghost" onclick="memberAction(${m.id},'deny')">拒绝</button>`:""}
       <button class="danger" onclick="memberAction(${m.id},'delete')">删除</button>

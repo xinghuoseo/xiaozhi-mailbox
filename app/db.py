@@ -44,6 +44,11 @@ def init_db():
     if "nickname" not in nkcols:
         with get_db() as conn:
             conn.execute("ALTER TABLE wecom_members ADD COLUMN nickname TEXT NOT NULL DEFAULT ''")
+    for col in ("chat_id", "chat_type"):
+        if col not in nkcols:
+            with get_db() as conn:
+                ddl = "TEXT NOT NULL DEFAULT ''" if col == "chat_id" else "TEXT NOT NULL DEFAULT 'single'"
+                conn.execute(f"ALTER TABLE wecom_members ADD COLUMN {col} {ddl}")
     acols = [r[1] for r in get_db().execute("PRAGMA table_info(ai_settings)").fetchall()]
     if "summary_prompt" not in acols:
         with get_db() as conn:
@@ -283,13 +288,20 @@ def has_approved_member(config_id: int) -> bool:
         return conn.execute("SELECT 1 FROM wecom_members WHERE config_id=? AND status='approved' LIMIT 1",
                             (config_id,)).fetchone() is not None
 
-def add_wecom_member(config_id: int, userid: str, status: str) -> bool:
-    """新增成员，返回是否为新插入"""
+def add_wecom_member(config_id: int, userid: str, status: str,
+                     chat_id: str = "", chat_type: str = "single") -> bool:
+    """新增成员（携带来源会话），返回是否为新插入"""
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT OR IGNORE INTO wecom_members(config_id, userid, status) VALUES(?,?,?)",
-            (config_id, userid, status))
+            "INSERT OR IGNORE INTO wecom_members(config_id, userid, status, chat_id, chat_type) "
+            "VALUES(?,?,?,?,?)", (config_id, userid, status, chat_id, chat_type))
         return cur.rowcount > 0
+
+def list_approved_members(config_id: int):
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT * FROM wecom_members WHERE config_id=? AND status='approved' ORDER BY id",
+            (config_id,)).fetchall()
 
 def set_wecom_member_nickname(member_id: int, nickname: str):
     with get_db() as conn:

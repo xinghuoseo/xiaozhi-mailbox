@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS wecom_members (
     config_id  INTEGER NOT NULL,                 -- 所属企微配置
     userid     TEXT NOT NULL,                    -- 企微成员账号
     nickname   TEXT NOT NULL DEFAULT '',         -- 身份（如：妈妈/爸爸/爷爷）
+    chat_id    TEXT NOT NULL DEFAULT '',         -- 成员会话ID（群聊=群chatid / 私聊=userid）
+    chat_type  TEXT NOT NULL DEFAULT 'single',   -- group=群聊 / single=私聊
     status     TEXT NOT NULL DEFAULT 'pending',  -- pending/approved/denied
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     decided_at TEXT,

@@ -161,8 +161,8 @@ def connected_map() -> dict:
     return {cid: bool(st["client"].connected) for cid, st in _state.items()}
 
 async def notify_child_message(content: str, config_ids=None, device_name: str = "小智设备") -> bool:
-    """孩子留言 → 同步推送到机器人群/单聊；config_ids 指定时只推这些配置（设备绑定），否则推全部。
-    返回是否至少成功送达一个目标。"""
+    """孩子留言 → 通知所有已通过成员（按成员各自的会话发送：群聊@成员 / 私聊直发）。
+    config_ids 指定时只推这些配置（设备绑定），None=广播全部。返回是否至少成功送达一个成员。"""
     from datetime import datetime
     stamp = datetime.now().strftime("%m-%d %H:%M")
     text = f"【{stamp}】{device_name} 留言：\n\n{content}"
@@ -171,20 +171,18 @@ async def notify_child_message(content: str, config_ids=None, device_name: str =
         # config_ids 语义：None=广播全部；[]或列表=仅推指定配置（设备绑定）
         if config_ids is not None and config_id not in config_ids:
             continue
-        cfg = db.get_wecom(config_id)
-        if not cfg or not st["client"].connected:
+        if not st["client"].connected:
             continue
-        try:
-            if cfg["chat_id"]:
-                await st["client"].send_markdown(cfg["chat_id"], text)
+        for m in db.list_approved_members(config_id):
+            target = m["chat_id"] if m["chat_type"] == "group" else m["userid"]
+            if not target:
+                continue
+            body = text + (f"\n<@{m['userid']}>" if m["chat_type"] == "group" else "")
+            try:
+                await st["client"].send_markdown(target, body)
                 sent = True
-            if cfg["mom_user"]:
-                try:
-                    await st["client"].send_markdown(cfg["mom_user"], text)
-                except Exception as e:
-                    log.warning("机器人单聊通知失败: %s", e)
-        except Exception as e:
-            log.warning("机器人%s 群通知失败: %s", config_id, e)
+            except Exception as e:
+                log.warning("通知成员%s 失败: %s", m["userid"], e)
     return sent
 
 # ---------- 连通测试（独立短连接） ----------
