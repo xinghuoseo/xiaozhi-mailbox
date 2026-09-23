@@ -61,7 +61,7 @@ def handle_command(text: str):
         return f"📬 还有 {len(rows)} 条未听过。\n\n" + "\n\n".join(lines)
     return None
 
-def on_mom_reply(content: str, author: str = ""):
-    """回信入信箱（author 为企微成员身份，如 妈妈/爸爸）"""
-    db.add_message("mom", content, "wecom", author=author or "妈妈")
+def on_mom_reply(content: str, author: str = "", userid: str = ""):
+    """回信入信箱（author 为企微成员身份如 妈妈/爸爸；userid 为成员账号，用于通知会话定位）"""
+    db.add_message("mom", content, "wecom", author=author or "妈妈", mom_userid=userid or "")
     log.info("回信已入信箱 [%s]: %s", author or "妈妈", content)

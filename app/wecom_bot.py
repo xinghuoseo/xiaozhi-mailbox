@@ -84,31 +84,26 @@ class WeComBotClient:
         chattype = body.get("chattype")            # group / single
         chatid = body.get("chatid") or ""
         userid = (body.get("from") or {}).get("userid") or ""
-        # 回填会话标识（通知用）
-        try:
-            # 会话绑定：仅首次记录（绑定关系稳定，不被后续会话覆盖）
-            if chattype == "group" and chatid and not self.cfg.get("chat_id"):
-                db.update_wecom_chatid(self.cfg["id"], chatid)
-                self.cfg["chat_id"] = chatid
-                log.info("机器人%s 已绑定群会话 %s", self.cfg["id"], chatid)
-            elif chattype == "single" and userid and not self.cfg.get("mom_user"):
-                db.update_wecom_user(self.cfg["id"], userid)
-                self.cfg["mom_user"] = userid
-                log.info("机器人%s 已绑定单聊会话 %s", self.cfg["id"], userid)
-        except Exception:
-            pass
+        # 来源会话（群=群chatid / 私聊=userid），记录到成员上供通知定位
+        member_chat_id = chatid if chattype == "group" else userid
+        member_chat_type = "group" if chattype == "group" else "single"
         # ---- 成员名单校验（企微端准入）----
         member = db.get_wecom_member(self.cfg["id"], userid) if userid else None
         if member is None and userid:
             # 该配置还没有任何已通过成员时，首个发消息者视为管理员自动通过
             first = not db.has_approved_member(self.cfg["id"])
             new_status = "approved" if (first or self.cfg.get("auto_approve")) else "pending"
-            db.add_wecom_member(self.cfg["id"], userid, new_status)
+            db.add_wecom_member(self.cfg["id"], userid, new_status,
+                                chat_id=member_chat_id, chat_type=member_chat_type)
             if new_status != "approved":
                 stream_id = generate_req_id("stream")
                 await self.client.reply_stream(frame, stream_id,
                     "📮 你好！使用信箱需要管理员开通权限，已为你提交申请，请等待管理员在控制台通过。", True)
                 return
+            member = db.get_wecom_member(self.cfg["id"], userid)
+        elif member and not member["chat_id"]:
+            # 老成员缺会话记录 → 补记
+            db.update_wecom_member_chat(member["id"], member_chat_id, member_chat_type)
             member = db.get_wecom_member(self.cfg["id"], userid)
         if member and member["status"] != "approved":
             return   # 未通过/已拒绝：静默忽略
@@ -118,11 +113,11 @@ class WeComBotClient:
             stream_id = generate_req_id("stream")
             await self.client.reply_stream(frame, stream_id, reply, True)
             return
-        # 非指令 → 回信入信箱（带成员身份）
+        # 非指令 → 回信入信箱（带成员身份 + 成员账号，供后续通知定位会话）
         author = ""
         if member:
             author = member["nickname"] or userid
-        wecom.on_mom_reply(content, author)
+        wecom.on_mom_reply(content, author, userid)
 
     async def send_markdown(self, chatid: str, content: str):
         """主动推送 markdown 到会话（群 chatid 或 单聊 userid）"""
@@ -161,30 +156,45 @@ def connected_map() -> dict:
     return {cid: bool(st["client"].connected) for cid, st in _state.items()}
 
 async def notify_child_message(content: str, config_ids=None, device_name: str = "小智设备") -> bool:
-    """孩子留言 → 按来源会话发送：已通过成员的会话去重后（群/私聊），每个会话只发一次。
-    群聊直接发群里（全员可见，不逐个@）。config_ids 指定时只推这些配置，None=广播全部。"""
+    """孩子留言 → 按来源会话发送：
+    优先定位该配置下最近一条「妈妈发出」记录对应的成员，按其会话类型发送
+    （私聊直发 / 群聊用企微 markdown 提及语法 <@userid> @该成员）；
+    无回信历史时兜底：向所有已通过成员的会话去重发送（群直接发群，不@）。
+    config_ids 指定时只推这些配置，None=广播全部。"""
     from datetime import datetime
     stamp = datetime.now().strftime("%m-%d %H:%M")
-    text = f"【{stamp}】{device_name} 留言：\n\n{content}"
     sent = False
     for config_id, st in list(_state.items()):
         if config_ids is not None and config_id not in config_ids:
             continue
         if not st["client"].connected:
             continue
-        # 收集已通过成员的会话并去重（群会话 / 私聊会话）
-        targets = {}
-        for m in db.list_approved_members(config_id):
-            if m["chat_type"] == "group" and m["chat_id"]:
-                targets[m["chat_id"]] = "group"
-            elif m["chat_type"] == "single" and m["userid"]:
-                targets[m["userid"]] = "single"
-        for target, ctype in targets.items():
+        targets = []   # [(chatid, chat_type, mention_userid)]
+        last = db.last_mom_sender(config_id)
+        if last:
+            # 按最近一次发送端成员的会话定位
+            if last["chat_type"] == "group" and last["chat_id"]:
+                targets.append((last["chat_id"], "group", last["userid"]))
+            else:
+                targets.append((last["userid"], "single", ""))
+        else:
+            # 兜底：还没有回信历史 → 所有已通过成员的会话去重发送
+            seen = set()
+            for m in db.list_approved_members(config_id):
+                key = m["chat_id"] if m["chat_type"] == "group" else m["userid"]
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                targets.append((key, m["chat_type"], ""))
+        for chatid, ctype, mention in targets:
+            text = f"【{stamp}】{device_name} 留言：\n\n{content}"
+            if ctype == "group" and mention:
+                text = f"<@{mention}> {text}"   # 企微 markdown 提及语法
             try:
-                await st["client"].send_markdown(target, text)
+                await st["client"].send_markdown(chatid, text)
                 sent = True
             except Exception as e:
-                log.warning("通知会话%s 失败: %s", target, e)
+                log.warning("通知会话%s 失败: %s", chatid, e)
     return sent
 
 # ---------- 连通测试（独立短连接） ----------

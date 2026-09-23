@@ -47,6 +47,10 @@ th{color:#999;font-weight:500}
 @keyframes r{to{transform:rotate(360deg)}}
 /* 记录页 */
 .rec-wrap{display:flex;gap:14px;align-items:stretch;height:calc(100vh - 98px)}
+.rec-side{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;min-height:0}
+.rec-side .day-list{width:100%;flex:1}
+.rec-device{padding:9px 12px;border:1px solid #e3e6ef;border-radius:10px;font-size:13px;background:#fff;cursor:pointer;color:#333;outline:none}
+.rec-device:focus{border-color:#4f6ef7}
 .day-list{width:300px;flex-shrink:0;overflow:auto}
 .day-item{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:10px;cursor:pointer;border:1px solid transparent}
 .day-item:hover{border-color:#c9d4ff}
@@ -124,7 +128,10 @@ th{color:#999;font-weight:500}
   <!-- 记录页 -->
   <div class="page" id="page-records">
     <div class="rec-wrap">
-      <div class="day-list" id="dayList"><div class="empty">暂无对话记录</div></div>
+      <div class="rec-side">
+        <select id="recDevice" class="rec-device" onchange="onRecDeviceChange()"><option value="0">加载中…</option></select>
+        <div class="day-list" id="dayList"><div class="empty">暂无对话记录</div></div>
+      </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0;height:100%;min-height:0">
         <div class="card" id="sumBar" style="display:none;padding:12px 14px;flex:0 0 auto;max-height:50%;overflow:auto">
           <div id="sumDate" style="font-size:12px;color:#999;margin-bottom:4px"></div>
@@ -180,7 +187,7 @@ th{color:#999;font-weight:500}
     </div>
     <div class="card">
       <div class="dev-head"><b>企微应用配置</b><button onclick="openWecomModal()">+ 添加配置</button></div>
-      <table><thead><tr><th>名称</th><th>Bot ID</th><th>Secret</th><th>群会话</th><th>连接状态</th><th>通过模式</th><th style="width:170px">操作</th></tr></thead>
+      <table><thead><tr><th>名称</th><th>Bot ID</th><th>Secret</th><th>连接状态</th><th>通过模式</th><th style="width:170px">操作</th></tr></thead>
       <tbody id="wecomTbody"></tbody></table>
     </div>
 
@@ -314,7 +321,7 @@ function switchTab(name){
   document.querySelectorAll(".topbar .tabs a").forEach(a=>a.classList.toggle("active", a.dataset.tab===name));
   document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active", p.id==="page-"+name));
   if (name==="devices") loadDevices();
-  if (name==="records") loadDays();
+  if (name==="records") loadRecDevices();
   if (name==="ai") loadAI();
   if (name==="wecom") { loadWecom(); loadMembers(); }
 }
@@ -369,15 +376,6 @@ async function memberAction(id, action){
   }catch(e){ toast(e.message, "err"); }
 }
 
-async function toggleAutoApprove(v){
-  const list = await api("/api/wecom");
-  for (const c of list){
-    await api(`/api/wecom/${c.id}`, {method:"PUT",
-      body: JSON.stringify({name:c.name, bot_id:c.bot_id, bot_key:"已设置", auto_approve: v})});
-  }
-  toast(v ? "已开启：新成员自动通过" : "已关闭：新成员需人工通过");
-}
-
 /* ---------- 企微配置 ---------- */
 async function loadWecom(){
   const list = await api("/api/wecom");
@@ -386,7 +384,6 @@ async function loadWecom(){
     <td><b>${esc(c.name)}</b></td>
     <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.bot_id)}</td>
     <td>${esc(c.bot_key_mask)||'-'}</td>
-    <td>${c.chat_id ? '<span class="dot on"></span>已记录' : '<i style="color:#999">进群@机器人后自动记录</i>'}</td>
     <td><span class="dot ${c.connected?'on':'off'}"></span>${c.connected?'已连接':'未连接'}</td>
     <td>${c.auto_approve ? '<span style="color:#22b07d;font-weight:600">自动</span>' : '<span style="color:#b8860b">审核</span>'}</td>
     <td class="ops-cell" style="width:170px">
@@ -504,11 +501,35 @@ async function testDevice(id){
 /* ---------- 记录 ---------- */
 let currentDay = "";
 let currentDays = [];
+let recDeviceId = 0;   // 当前查看的设备（0=全部）
+
+async function loadRecDevices(){
+  const sel = document.getElementById("recDevice");
+  try{
+    const list = await api("/api/devices");
+    if (!list.length){
+      sel.innerHTML = `<option value="0">暂无设备</option>`;
+      recDeviceId = 0; loadDays(); return;
+    }
+    sel.innerHTML = list.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
+    if (list.length > 1) sel.insertAdjacentHTML("afterbegin", `<option value="0">全部设备</option>`);
+    sel.value = list.length > 1 ? "0" : String(list[0].id);   // 单设备默认载入；多设备默认全部
+    recDeviceId = parseInt(sel.value) || 0;
+  }catch(e){ sel.innerHTML = `<option value="0">全部设备</option>`; recDeviceId = 0; }
+  loadDays();
+}
+
+function onRecDeviceChange(){
+  recDeviceId = parseInt(document.getElementById("recDevice").value) || 0;
+  currentDay = "";
+  document.getElementById("chatBox").innerHTML = `<div class="empty">← 选择左侧日期查看当天对话</div>`;
+  loadDays();
+}
 
 async function loadDays(){
-  const days = await api("/api/records/days");
+  const days = await api(`/api/records/days?device_id=${recDeviceId}`);
   currentDays = days;
-  if (currentDay) showSummaryBar(currentDay);
+  if (currentDay) showSummaryBar(currentDay); else document.getElementById("sumBar").style.display="none";
   const box = document.getElementById("dayList");
   if (!days.length){ box.innerHTML = `<div class="empty">暂无对话记录</div>`; return; }
   box.innerHTML = days.map(d=>{
@@ -554,15 +575,18 @@ async function openDay(date){
   document.querySelectorAll(".day-item").forEach(el=>el.classList.remove("active"));
   const item = document.getElementById("day-"+date);
   if (item) item.classList.add("active");
-  const msgs = await api(`/api/records/day/${date}`);
+  const msgs = await api(`/api/records/day/${date}?device_id=${recDeviceId}`);
   const box = document.getElementById("chatBox");
   if (!msgs.length){ box.innerHTML = `<div class="empty">当天没有对话</div>`; return; }
   box.innerHTML = `<div class="date-title">${date}</div>` + msgs.map(m=>{
-    const who = m.sender==="child" ? "孩子" : "妈妈";
-    const src = {voice:"小智语音", web:"网页", wecom:"企业微信"}[m.source] || m.source;
+    // 孩子消息带设备名；妈妈消息显示身份（不显示“企业微信”）
+    const who = m.sender==="child"
+      ? `孩子${m.device_name ? `（${esc(m.device_name)}）` : ""}`
+      : esc(m.author || "妈妈");
+    const src = m.sender==="child" ? ({voice:"小智语音", web:"网页", wecom:"企业微信"}[m.source] || m.source) : "";
     const state = m.read ? (m.sender==="child" ? " · 已送达" : " · 已读") : "";
     return `<div class="bubble-row ${m.sender}">
-      <div class="bubble"><div class="meta">${who} · ${m.time.slice(5,16)} · ${src}${state}</div>${esc(m.content)}</div></div>`;
+      <div class="bubble"><div class="meta">${who} · ${m.time.slice(5,16)}${src ? ` · ${src}` : ""}${state}</div>${esc(m.content)}</div></div>`;
   }).join("");
   box.scrollTop = box.scrollHeight;
 }

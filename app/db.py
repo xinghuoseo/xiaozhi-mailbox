@@ -61,6 +61,28 @@ def init_db():
     with get_db() as conn:
         conn.execute("UPDATE ai_settings SET base_url='https://api.minimax.cn/v1/chat/completions' "
                      "WHERE base_url LIKE '%minimaxi.com%'")
+    # V2.10 迁移：messages 补 mom_userid 列（记录妈妈回信的企微成员账号，用于通知会话定位）
+    mcols = [r[1] for r in get_db().execute("PRAGMA table_info(messages)").fetchall()]
+    if "mom_userid" not in mcols:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE messages ADD COLUMN mom_userid TEXT NOT NULL DEFAULT ''")
+    # V2.10 迁移：历史成员会话回填（此前群消息只记到配置表，成员上缺失 → 按配置绑定的群回填）
+    with get_db() as conn:
+        rows = conn.execute("SELECT m.id, m.userid, m.config_id, c.chat_id cfg_chat, c.mom_user "
+                            "FROM wecom_members m JOIN wecom_configs c ON c.id=m.config_id "
+                            "WHERE m.chat_id=''").fetchall()
+        for r in rows:
+            if r["cfg_chat"] and r["userid"] != (r["mom_user"] or ""):
+                conn.execute("UPDATE wecom_members SET chat_type='group', chat_id=? WHERE id=?",
+                             (r["cfg_chat"], r["id"]))
+            elif r["mom_user"] and r["userid"] == r["mom_user"]:
+                conn.execute("UPDATE wecom_members SET chat_type='single', chat_id=? WHERE id=?",
+                             (r["userid"], r["id"]))
+    # V2.10 迁移：wecom_configs 删除 chat_id 列（群会话统一记录在成员上）
+    wcols3 = [r[1] for r in get_db().execute("PRAGMA table_info(wecom_configs)").fetchall()]
+    if "chat_id" in wcols3:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE wecom_configs DROP COLUMN chat_id")
 
 # ---------- 设备 ----------
 def list_devices():
@@ -100,14 +122,24 @@ def delete_device(device_id: int):
         conn.execute("DELETE FROM devices WHERE id=?", (device_id,))
 
 # ---------- 留言 ----------
-def add_message(sender: str, content: str, source: str, device_id: int = 0, author: str = "") -> int:
+def add_message(sender: str, content: str, source: str, device_id: int = 0,
+                author: str = "", mom_userid: str = "") -> int:
     if not author:
         author = "妈妈" if sender == "mom" else ""
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO messages(sender, content, source, device_id, author) VALUES(?,?,?,?,?)",
-            (sender, content.strip(), source, device_id, author))
+            "INSERT INTO messages(sender, content, source, device_id, author, mom_userid) VALUES(?,?,?,?,?,?)",
+            (sender, content.strip(), source, device_id, author, mom_userid))
         return cur.lastrowid
+
+def last_mom_sender(config_id: int):
+    """该接收配置下最近一条"妈妈发出"的记录（发送端定位）：返回成员 userid/会话信息，无则 None"""
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT w.userid, w.chat_id, w.chat_type FROM messages m "
+            "JOIN wecom_members w ON w.config_id=? AND w.userid=m.mom_userid AND w.status='approved' "
+            "WHERE m.sender='mom' AND m.mom_userid != '' "
+            "ORDER BY m.id DESC LIMIT 1", (config_id,)).fetchone()
 
 def unread_mom_messages(limit: int = 5):
     with get_db() as conn:
@@ -135,18 +167,22 @@ def unread_mom_count() -> int:
         return conn.execute(
             "SELECT COUNT(*) c FROM messages WHERE sender='mom' AND read_at IS NULL").fetchone()["c"]
 
-def day_stats(limit: int = 90):
-    """按天聚合：日期、对话总条数"""
+def day_stats(limit: int = 90, device_id: int = 0):
+    """按天聚合：日期、对话总条数；device_id 过滤（0=全部，指定时保留公共消息 device_id=0）"""
     with get_db() as conn:
         return conn.execute(
             "SELECT date(created_at) d, COUNT(*) c FROM messages "
-            "GROUP BY date(created_at) ORDER BY d DESC LIMIT ?", (limit,)).fetchall()
+            "WHERE (?=0 OR device_id IN (0, ?)) "
+            "GROUP BY date(created_at) ORDER BY d DESC LIMIT ?", (device_id, device_id, limit)).fetchall()
 
-def messages_by_day(date_str: str):
+def messages_by_day(date_str: str, device_id: int = 0):
     with get_db() as conn:
         return conn.execute(
-            "SELECT sender, content, created_at, source, read_at, author FROM messages "
-            "WHERE date(created_at)=? ORDER BY id", (date_str,)).fetchall()
+            "SELECT m.sender, m.content, m.created_at, m.source, m.read_at, m.author, "
+            "d.name AS device_name FROM messages m "
+            "LEFT JOIN devices d ON d.id=m.device_id "
+            "WHERE date(m.created_at)=? AND (?=0 OR m.device_id IN (0, ?)) "
+            "ORDER BY m.id", (date_str, device_id, device_id)).fetchall()
 
 # ---------- 每日总结 ----------
 def get_summary(date_str: str):
@@ -246,10 +282,6 @@ def update_wecom_user(config_id: int, mom_user: str):
     with get_db() as conn:
         conn.execute("UPDATE wecom_configs SET mom_user=? WHERE id=?", (mom_user, config_id))
 
-def update_wecom_chatid(config_id: int, chat_id: str):
-    with get_db() as conn:
-        conn.execute("UPDATE wecom_configs SET chat_id=? WHERE id=?", (chat_id, config_id))
-
 def delete_wecom(config_id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM wecom_configs WHERE id=?", (config_id,))
@@ -296,6 +328,12 @@ def add_wecom_member(config_id: int, userid: str, status: str,
             "INSERT OR IGNORE INTO wecom_members(config_id, userid, status, chat_id, chat_type) "
             "VALUES(?,?,?,?,?)", (config_id, userid, status, chat_id, chat_type))
         return cur.rowcount > 0
+
+def update_wecom_member_chat(member_id: int, chat_id: str, chat_type: str):
+    """补记/更新成员来源会话（群=群chatid，私聊=userid）"""
+    with get_db() as conn:
+        conn.execute("UPDATE wecom_members SET chat_id=?, chat_type=? WHERE id=?",
+                     (chat_id, chat_type, member_id))
 
 def list_approved_members(config_id: int):
     with get_db() as conn:

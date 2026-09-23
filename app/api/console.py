@@ -109,8 +109,8 @@ async def test_device(device_id: int, token: str = Depends(require_auth)):
 
 # ---------- 对话记录 ----------
 @router.get("/api/records/days")
-async def records_days(token: str = Depends(require_auth)):
-    stats = {r["d"]: r["c"] for r in db.day_stats(90)}
+async def records_days(device_id: int = 0, token: str = Depends(require_auth)):
+    stats = {r["d"]: r["c"] for r in db.day_stats(90, device_id)}
     dates = sorted(stats.keys(), reverse=True)
     out = []
     for d in dates:
@@ -122,11 +122,12 @@ async def records_days(token: str = Depends(require_auth)):
     return out
 
 @router.get("/api/records/day/{date_str}")
-async def records_day(date_str: str, token: str = Depends(require_auth)):
+async def records_day(date_str: str, device_id: int = 0, token: str = Depends(require_auth)):
     return [{"sender": r["sender"], "content": r["content"],
              "time": r["created_at"], "source": r["source"], "read": bool(r["read_at"]),
-             "author": r["author"] or ("妈妈" if r["sender"] == "mom" else "")}
-            for r in db.messages_by_day(date_str)]
+             "author": r["author"] or ("妈妈" if r["sender"] == "mom" else ""),
+             "device_name": r["device_name"] or ""}
+            for r in db.messages_by_day(date_str, device_id)]
 
 @router.post("/api/records/send")
 async def records_send(request: Request, token: str = Depends(require_auth)):
@@ -202,7 +203,7 @@ def _bot_connected(config_id: int) -> bool:
 def _wecom_out(cfg) -> dict:
     return {"id": cfg["id"], "name": cfg["name"],
             "bot_id": cfg["bot_id"] or "", "bot_key_mask": _mask(cfg["bot_key"]),
-            "chat_id": cfg["chat_id"], "auto_approve": bool(cfg["auto_approve"]),
+            "auto_approve": bool(cfg["auto_approve"]),
             "connected": _bot_connected(cfg["id"])}
 
 @router.get("/api/wecom")
@@ -283,16 +284,16 @@ async def member_action(member_id: int, action: str, token: str = Depends(requir
 
 @router.post("/api/wecom/{config_id}/send")
 async def wecom_send(config_id: int, request: Request, token: str = Depends(require_auth)):
-    """管理用：主动往机器人的群/单聊发消息（chatid 空则用自动记录的群会话）"""
+    """管理用：主动往指定会话（chatid）发消息"""
     cfg = db.get_wecom(config_id)
     if not cfg:
         raise HTTPException(status_code=404, detail="配置不存在")
     body = await request.json()
-    chatid = (body.get("chatid") or "").strip() or cfg["chat_id"]
+    chatid = (body.get("chatid") or "").strip()
     content = (body.get("content") or "").strip()
     if not chatid:
         return JSONResponse(status_code=400, content={"ok": False,
-            "msg": "还没有群会话记录：先在群里 @机器人 发一条消息"})
+            "msg": "请先填写目标会话 ID（群 chatid 或成员 userid）"})
     if not content:
         return JSONResponse(status_code=400, content={"ok": False, "msg": "内容不能为空"})
     from .. import wecom_bot

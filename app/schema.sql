@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     read_at     TEXT,
     device_id   INTEGER NOT NULL DEFAULT 0,
-    author      TEXT NOT NULL DEFAULT ''
+    author      TEXT NOT NULL DEFAULT '',
+    mom_userid  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sender_read ON messages(sender, read_at);
 CREATE INDEX IF NOT EXISTS idx_day ON messages(created_at);
@@ -57,7 +58,6 @@ CREATE TABLE IF NOT EXISTS wecom_configs (
     bot_id    TEXT NOT NULL DEFAULT '',
     bot_key   TEXT NOT NULL DEFAULT '',
     mom_user  TEXT NOT NULL DEFAULT '',
-    chat_id   TEXT NOT NULL DEFAULT '',
     enabled   INTEGER NOT NULL DEFAULT 1,
     auto_approve INTEGER NOT NULL DEFAULT 0,   -- 1=新成员自动通过 0=需人工审批
     webhook_url TEXT NOT NULL DEFAULT '',      -- 通知 Webhook（群机器人消息推送地址，可选）
