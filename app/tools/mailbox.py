@@ -29,10 +29,10 @@ def read_messages_from_mom(limit: int = 5, device_id: int = 0) -> dict:
     """当孩子想听妈妈的留言、妈妈的回信时调用（孩子说'读留言''妈妈的留言''查留言''查信箱''妈妈有没有给我留言'都算）。返回妈妈最新未读留言并自动标记已读，已读过的不会重复出现。"""
     rows = db.unread_mom_messages(min(max(limit, 1), 10))
     if not rows:
-        return {"success": True, "result": "妈妈暂时还没有新的留言哦"}
-    texts = [f"第{i}条：{r['content']}" for i, r in enumerate(rows, 1)]
+        return {"success": True, "result": "暂时没有新的留言哦"}
+    texts = [f"[{r['created_at'][5:16]}][{r['author'] or '妈妈'}]：{r['content']}" for r in rows]
     db.mark_read([r["id"] for r in rows])
-    return {"success": True, "result": f"妈妈给你留了{len(rows)}条言。" + "；".join(texts)}
+    return {"success": True, "result": f"共有{len(rows)}条留言。\n\n" + "\n\n".join(texts)}
 
 def get_unread_count(device_id: int = 0) -> dict:
     """当孩子想知道妈妈有没有新留言、有几条留言时调用（孩子说'妈妈有什么吗''有几条留言'都算），只返回数量不读内容。"""

@@ -35,6 +35,15 @@ def init_db():
     if "wecom_config_id" not in dcols:
         with get_db() as conn:
             conn.execute("ALTER TABLE devices ADD COLUMN wecom_config_id INTEGER NOT NULL DEFAULT 0")
+    # 旧表迁移：messages 补 author 列 / wecom_members 补 nickname 列
+    mcols = [r[1] for r in get_db().execute("PRAGMA table_info(messages)").fetchall()]
+    if "author" not in mcols:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE messages ADD COLUMN author TEXT NOT NULL DEFAULT ''")
+    nkcols = [r[1] for r in get_db().execute("PRAGMA table_info(wecom_members)").fetchall()]
+    if "nickname" not in nkcols:
+        with get_db() as conn:
+            conn.execute("ALTER TABLE wecom_members ADD COLUMN nickname TEXT NOT NULL DEFAULT ''")
 
 # ---------- 设备 ----------
 def list_devices():
@@ -74,17 +83,19 @@ def delete_device(device_id: int):
         conn.execute("DELETE FROM devices WHERE id=?", (device_id,))
 
 # ---------- 留言 ----------
-def add_message(sender: str, content: str, source: str, device_id: int = 0) -> int:
+def add_message(sender: str, content: str, source: str, device_id: int = 0, author: str = "") -> int:
+    if not author:
+        author = "妈妈" if sender == "mom" else ""
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO messages(sender, content, source, device_id) VALUES(?,?,?,?)",
-            (sender, content.strip(), source, device_id))
+            "INSERT INTO messages(sender, content, source, device_id, author) VALUES(?,?,?,?,?)",
+            (sender, content.strip(), source, device_id, author))
         return cur.lastrowid
 
 def unread_mom_messages(limit: int = 5):
     with get_db() as conn:
         return conn.execute(
-            "SELECT id, content, created_at FROM messages "
+            "SELECT id, content, created_at, author FROM messages "
             "WHERE sender='mom' AND read_at IS NULL ORDER BY id ASC LIMIT ?",
             (limit,)).fetchall()
 
@@ -117,7 +128,7 @@ def day_stats(limit: int = 90):
 def messages_by_day(date_str: str):
     with get_db() as conn:
         return conn.execute(
-            "SELECT sender, content, created_at, source, read_at FROM messages "
+            "SELECT sender, content, created_at, source, read_at, author FROM messages "
             "WHERE date(created_at)=? ORDER BY id", (date_str,)).fetchall()
 
 # ---------- 每日总结 ----------
@@ -261,6 +272,10 @@ def add_wecom_member(config_id: int, userid: str, status: str) -> bool:
             "INSERT OR IGNORE INTO wecom_members(config_id, userid, status) VALUES(?,?,?)",
             (config_id, userid, status))
         return cur.rowcount > 0
+
+def set_wecom_member_nickname(member_id: int, nickname: str):
+    with get_db() as conn:
+        conn.execute("UPDATE wecom_members SET nickname=? WHERE id=?", (nickname.strip(), member_id))
 
 def set_wecom_member_status(member_id: int, status: str):
     with get_db() as conn:

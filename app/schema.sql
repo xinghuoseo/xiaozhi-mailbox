@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS messages (
     source      TEXT NOT NULL DEFAULT 'voice',
     created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     read_at     TEXT,
-    device_id   INTEGER NOT NULL DEFAULT 0
+    device_id   INTEGER NOT NULL DEFAULT 0,
+    author      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sender_read ON messages(sender, read_at);
 CREATE INDEX IF NOT EXISTS idx_day ON messages(created_at);
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS wecom_members (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     config_id  INTEGER NOT NULL,                 -- 所属企微配置
     userid     TEXT NOT NULL,                    -- 企微成员账号
+    nickname   TEXT NOT NULL DEFAULT '',         -- 身份（如：妈妈/爸爸/爷爷）
     status     TEXT NOT NULL DEFAULT 'pending',  -- pending/approved/denied
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     decided_at TEXT,

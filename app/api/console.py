@@ -124,7 +124,8 @@ async def records_days(token: str = Depends(require_auth)):
 @router.get("/api/records/day/{date_str}")
 async def records_day(date_str: str, token: str = Depends(require_auth)):
     return [{"sender": r["sender"], "content": r["content"],
-             "time": r["created_at"], "source": r["source"], "read": bool(r["read_at"])}
+             "time": r["created_at"], "source": r["source"], "read": bool(r["read_at"]),
+             "author": r["author"] or ("妈妈" if r["sender"] == "mom" else "")}
             for r in db.messages_by_day(date_str)]
 
 @router.post("/api/records/send")
@@ -247,8 +248,16 @@ async def member_list(config_id: int = 0, token: str = Depends(require_auth)):
     rows = db.list_wecom_members(config_id or None)
     cnames = {c["id"]: c["name"] for c in db.list_wecom_configs()}
     return [{"id": m["id"], "config_id": m["config_id"], "config_name": cnames.get(m["config_id"], "-"),
-             "userid": m["userid"], "status": m["status"], "created_at": m["created_at"],
-             "decided_at": m["decided_at"] or ""} for m in rows]
+             "userid": m["userid"], "nickname": m["nickname"], "status": m["status"],
+             "created_at": m["created_at"], "decided_at": m["decided_at"] or ""} for m in rows]
+
+@router.post("/api/wecom/members/{member_id}/edit")
+async def member_edit(member_id: int, request: Request, token: str = Depends(require_auth)):
+    """编辑成员身份"""
+    body = await request.json()
+    nickname = (body.get("nickname") or "").strip()
+    db.set_wecom_member_nickname(member_id, nickname)
+    return {"ok": True}
 
 @router.post("/api/wecom/members/{member_id}/{action}")
 async def member_action(member_id: int, action: str, token: str = Depends(require_auth)):

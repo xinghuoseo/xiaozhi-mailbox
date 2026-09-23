@@ -185,8 +185,8 @@ th{color:#999;font-weight:500}
     <div style="flex:1;min-width:0;display:none" id="wecomSub-apply">
       <div class="card">
         <b>成员 / 申请列表</b>
-        <p class="ai-note">群或单聊里 @机器人 发消息的新成员会进入申请（状态待通过），通过后即可回信与使用指令。</p>
-        <table><thead><tr><th>用户ID</th><th>所属配置</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+        <p class="ai-note">群或单聊里 @机器人 发消息的新成员会进入申请（状态待通过），通过后即可回信与使用指令。编辑"身份"后，孩子的读留言会播报该身份。</p>
+        <table><thead><tr><th>用户ID</th><th>身份</th><th>所属配置</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
         <tbody id="memberTbody"></tbody></table>
       </div>
     </div>
@@ -211,6 +211,18 @@ th{color:#999;font-weight:500}
       </div>
     </div>
     <div class="btns"><button class="ghost" onclick="closeMask('wecomMask')">取消</button><button onclick="saveWecom()">保存</button></div>
+  </div>
+</div>
+
+<!-- 身份编辑弹窗 -->
+<div class="mask" id="nickMask">
+  <div class="modal">
+    <h3>编辑身份</h3>
+    <input type="hidden" id="nickId">
+    <label>用户ID</label><input id="nickUser" disabled style="background:#f5f6fa">
+    <label>身份（孩子听留言时播报的称呼，如：妈妈 / 爸爸 / 爷爷）</label>
+    <input id="nickInput" placeholder="请输入身份">
+    <div class="btns"><button class="ghost" onclick="closeMask('nickMask')">取消</button><button onclick="saveNick()">保存</button></div>
   </div>
 </div>
 
@@ -310,14 +322,30 @@ async function loadMembers(){
   const stMap = {approved:"<span class='dot on'></span>已通过", pending:"<span class='dot off'></span>待通过", denied:"<span class='dot off'></span>已拒绝"};
   tb.innerHTML = list.map(m=>`<tr>
     <td><b>${esc(m.userid)}</b></td>
+    <td>${esc(m.nickname)||'<i style="color:#999">未设置</i>'}</td>
     <td>${esc(m.config_name)}</td>
     <td>${stMap[m.status]||m.status}</td>
     <td><small>${m.decided_at||m.created_at}</small></td>
     <td class="ops-cell">
+      <button class="ghost" onclick='openNickModal(${JSON.stringify({id:m.id,nickname:m.nickname})})'>编辑</button>
       ${m.status!=="approved"?`<button onclick="memberAction(${m.id},'approve')">通过</button>`:""}
       ${m.status!=="denied"?`<button class="ghost" onclick="memberAction(${m.id},'deny')">拒绝</button>`:""}
       <button class="danger" onclick="memberAction(${m.id},'delete')">删除</button>
-    </td></tr>`).join("") || `<tr><td colspan="5"><div class="empty">暂无成员/申请（群成员 @机器人 发消息后出现在这里）</div></td></tr>`;
+    </td></tr>`).join("") || `<tr><td colspan="6"><div class="empty">暂无成员/申请（群成员 @机器人 发消息后出现在这里）</div></td></tr>`;
+}
+
+function openNickModal(m){
+  nickId.value = m.id;
+  nickUser.value = m.userid || "";
+  nickInput.value = m.nickname || "";
+  document.getElementById("nickMask").classList.add("show");
+}
+
+async function saveNick(){
+  try{
+    await api(`/api/wecom/members/${nickId.value}/edit`, {method:"POST", body: JSON.stringify({nickname: nickInput.value.trim()})});
+    closeMask("nickMask"); toast("身份已保存"); loadMembers();
+  }catch(e){ toast(e.message, "err"); }
 }
 
 async function memberAction(id, action){

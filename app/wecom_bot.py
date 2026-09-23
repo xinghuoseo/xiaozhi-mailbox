@@ -116,8 +116,11 @@ class WeComBotClient:
             stream_id = generate_req_id("stream")
             await self.client.reply_stream(frame, stream_id, reply, True)
             return
-        # 非指令 → 妈妈的回信入信箱
-        wecom.on_mom_reply(content)
+        # 非指令 → 回信入信箱（带成员身份）
+        author = ""
+        if member:
+            author = member["nickname"] or userid
+        wecom.on_mom_reply(content, author)
 
     async def send_markdown(self, chatid: str, content: str):
         """主动推送 markdown 到会话（群 chatid 或 单聊 userid）"""
