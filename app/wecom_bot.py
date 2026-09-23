@@ -163,7 +163,7 @@ async def notify_child_message(content: str, config_ids=None, device_name: str =
     返回是否至少成功送达一个目标。"""
     from datetime import datetime
     stamp = datetime.now().strftime("%m-%d %H:%M")
-    text = f"[{stamp}] {device_name} 留言：\n\n{content}"
+    text = f"【{stamp}】{device_name} 留言：\n\n{content}"
     sent = False
     import httpx
     for config_id, st in list(_state.items()):
