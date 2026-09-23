@@ -11,6 +11,20 @@ def get_settings() -> dict:
 def save_settings(api_key: str, model: str, base_url: str):
     db.save_ai_settings(api_key.strip(), model.strip(), base_url.strip())
 
+# ===== 总结提示词三段式：我的提示词(用户可编辑) + 内容表达词(系统) + 输出结构词(系统) =====
+OUTPUT_RULES = """
+
+【输出要求】
+严格只输出一个 JSON 对象，不要输出任何解释、前缀或代码块标记，格式如下：
+{"short": "不超过15字的当日交流核心概括，语气温馨", "full": "150字左右的当日对话完整总结，说明孩子和妈妈各自说了什么、当天交流的氛围"}"""
+
+def build_summary_prompt(date_str: str, transcript: str) -> str:
+    """最终提示词 = 我的提示词(用户编辑，{date}占位可选) + 对话记录(系统拼接) + 输出要求(固定)"""
+    s = get_settings()
+    user_part = (s.get("summary_prompt") or db.SUMMARY_PROMPT_DEFAULT).replace("{date}", date_str)
+    record = f"\n\n【对话记录（{date_str}）】\n{transcript}"
+    return user_part + record + OUTPUT_RULES
+
 def chat(prompt: str, system: str = "") -> str:
     """调用 MiniMax chatcompletion_v2，返回模型回复文本"""
     s = get_settings()
@@ -58,9 +72,7 @@ def generate_daily_summary(date_str: str) -> dict:
         who = "孩子" if r["sender"] == "child" else "妈妈"
         lines.append(f"[{r['created_at'][11:16]}] {who}{'留言' if r['sender']=='child' else '回信'}：{r['content']}")
     transcript = "\n".join(lines)
-    # 提示词：优先使用控制台自定义模板（占位符 {date} {transcript}），为空用默认
-    tpl = get_settings().get("summary_prompt") or db.SUMMARY_PROMPT_DEFAULT
-    prompt = tpl.replace("{date}", date_str).replace("{transcript}", transcript)
+    prompt = build_summary_prompt(date_str, transcript)
     try:
         data = _extract_json(chat(prompt))
         short = (data.get("short") or "").strip()[:30]

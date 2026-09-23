@@ -150,9 +150,9 @@ th{color:#999;font-weight:500}
         <input id="aiModel" placeholder="MiniMax-M3">
         <label>接口地址</label>
         <input id="aiUrl" placeholder="https://api.minimaxi.com/v1/text/chatcompletion_v2">
-        <label>总结提示词（可用占位符：{date}=日期，{transcript}=当日对话记录；留空使用默认）</label>
-        <textarea id="aiPrompt" rows="9" style="font-family:monospace;font-size:12px;line-height:1.6"></textarea>
-        <div class="ai-note">默认提示词会要求 AI 一次性返回 JSON（含 15 字短总结 short 和完整总结 full 两个字段，一次调用同时得到）。清空此框保存即恢复默认。</div>
+        <label>我的提示词（只写你的总结要求；系统会自动追加「对话记录」和「输出格式」，占位符 {date}=日期。留空使用默认）</label>
+        <textarea id="aiPrompt" rows="6" style="font-family:monospace;font-size:13px;line-height:1.6"></textarea>
+        <div class="ai-note">最终提示词 = 我的提示词 + 当天对话记录（系统自动拼接，时间正序）+ 输出格式要求（系统固定，保证返回 JSON 可解析）。一次调用同时生成 15 字短总结和完整总结。清空此框保存即恢复默认。</div>
         <div class="btns">
           <button onclick="saveAI()">保存设置</button>
           <button class="ghost" id="aiTestBtn" onclick="testAI()">连通测试</button>
